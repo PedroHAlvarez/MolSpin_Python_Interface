@@ -1,7 +1,7 @@
 import os
 import re
 
-import nodes
+from . import nodes
 
 class FileTemplate:
     def __init__ (self, *, name):
@@ -105,7 +105,7 @@ def _init_input_data():
         input_data['spinsystems']['System']['states']['identity'] = {}
         return input_data
 
-def main():
+def test():
     template = get_template("BasicTemplate.msd")
     input_data = _init_input_data()
     input_data['spinsystems']['System']['spins']['electrons']['e1'] = {
@@ -130,6 +130,3 @@ def main():
         "tensor" : "isotropic(1.5)"
     }
     print(template.render_to_file(input_data, "output.msd"))
-
-if __name__ == "__main__":
-    main()

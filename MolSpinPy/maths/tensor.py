@@ -1,6 +1,10 @@
 import enum
 import sys
+from  MolSpinPy import utility
+from MolSpinPy.utility import imported
+from MolSpinPy.utility import regex_functions
 
+#add documentation
 class TensorType(enum.Enum):
     ISOTROPIC = 1
     ANISOTROPIC = 2
@@ -13,7 +17,7 @@ class Tensor:
         self.type = TensorType.NOT_SET
         self.values = None
         self.derived_classes = [None]
-        
+
     def parse_tensor(self):
         raise NotImplementedError("Subclasses must implement parse_tensor method")
     def render_tensor(self):
@@ -23,14 +27,46 @@ class Tensor:
         if len(arr) == 3 or any(len(row) != 3 for row in arr):
             raise ValueError("Input array must be 3x3")
         elif(len(arr) == 3) and all(len(row) == 3 for row in arr):
-            return "; ".join(", ".join(str(v) for v in row) for row in arr)
+            return "; ".join(", ".join(str(v) for v in row) for row in arr) #full matrix
+        elif len(arr) == 9:
+            return "; ".join(", ".join(str(arr[i*3 + j]) for j in range(3)) for i in range(3)) #full matrix
         elif len(arr) == 3:
-            return ", ".join(str(v) for v in arr)
+            return ", ".join(str(v) for v in arr) #diagonal anisotropic or isotropic 
         elif len(arr) == 1:
-            return str(arr[0])
+            return str(arr[0]) #isotropic
         else:
             raise ValueError("Input array not valid")
         return ""
+    #add static method for numpy array, pandas, custom covertor 
+    
+    @staticmethod
+    def convert_numpy_array_to_input_string(arr):
+        np = imported.ImportManager.import_numpy()
+        if isinstance(arr, np.ndarray):
+            if arr.shape == (3, 3):
+                return "; ".join(",".join(str(v) for v in row) for row in arr) #full matrix
+            elif arr.shape == (3,):
+                return ",".join(str(v) for v in arr) #diagonal anisotropic or isotropic 
+            elif arr.shape == (1,):
+                return str(arr[0]) #isotropic
+            else:
+                raise ValueError("Input array not valid")
+        else:
+            raise ValueError("Input is not a numpy array")
+    
+    @staticmethod
+    def convert_custom_data_type_array_to_input_string(arr, method):
+        if isinstance(method, function):
+            output = method(arr)
+            if not isinstance(output, str):
+                raise ValueError("Custom conversion method must return a string")
+            #check that output string is in correct format for tensor input
+            #either "x" for isotropic, "x,y,z" for anisotropic, or "x1,x2,x3; x4,x5,x6; x7,x8,x9" for matrix
+            regex_functions.tensor_input(output) #will raise ValueError if not in correct format
+            return output
+        else:
+            raise ValueError("Method must be a function")
+
 
 #usage example: a = Isotropic("2")
 class Isotropic(Tensor):

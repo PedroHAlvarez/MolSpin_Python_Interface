@@ -1,5 +1,6 @@
-.dat
-.log
-.vscode
-.pyc
-.msd
+*.dat
+*.log
+*.vscode
+*.pyc
+*.msd
+_pycache_\*
