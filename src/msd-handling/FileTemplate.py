@@ -14,6 +14,10 @@ class FileTemplate:
         raw = "".join([node.render(context) for node in self.node_tree])
         #return raw
         return re.sub(r'^\s*$\n', '', raw, flags=re.MULTILINE)
+    def render_to_file(self, context, output_path):
+        rendered_content = self.render(context)
+        with open(output_path, "w") as f:
+            f.write(rendered_content)
     def compile_template(self):
         self.raw_text = re.sub(r"{% comment %}.*?{% endcomment %}", "", self.raw_template, flags=re.DOTALL)
 
@@ -125,7 +129,7 @@ def main():
         "group2" : "n1",
         "tensor" : "isotropic(1.5)"
     }
-    print(template.render(input_data))
+    print(template.render_to_file(input_data, "output.msd"))
 
 if __name__ == "__main__":
     main()
