@@ -85,13 +85,24 @@ class IfNode(Node):
                 return "".join(child.render(context) for child in body)
         return ""
     def evaluate_condition(self, condition, context):
-        val = context
-        for part in condition.replace("if ", "").replace("elif ", "").split("."):
-            if isinstance(val, dict):
-                val = val.get(part)
-            else:
-                return False
-        return bool(val)
+        expr = condition.replace("if ", "").replace("elif ", "").strip()
+        path_pattern = r'\b(?!(?:and|or|not|xor)\b)[a-zA-Z_][\w\.]*\b'
+        def resolve_path(match):
+            path = match.group(0)
+            val = context
+            for part in path.split("."):
+                if isinstance(val,dict):
+                    val = val.get(part)
+                else:
+                    val = None
+                    break
+            return "True" if self.is_truthy(val) else "False"
+        processed_expr = re.sub(path_pattern,resolve_path,expr)
+        processed_expr = processed_expr.replace(" xor ", " ^ ")
+        try:
+            return eval(processed_expr, {"__builtins__": None},{})
+        except Exception:
+            return False
     def __repr__(self):
         print(f"IfNode with {len(self.branches)} branches:")
         for condition, body in self.branches:
@@ -99,6 +110,16 @@ class IfNode(Node):
             for child in body:
                 print(f"  {child}")
         return ""
+    
+    @staticmethod
+    def is_truthy(value):
+        if isinstance(value, (dict,list)):
+            return len(value) > 0
+        if isinstance(value, str):
+            normalized = value.strip().lower()
+            if normalized in ("true", "yes", "1" , "on"): return True
+            if normalized in ("false", "no", "0", "off", ""): return False
+        return bool(value)
 
 
        

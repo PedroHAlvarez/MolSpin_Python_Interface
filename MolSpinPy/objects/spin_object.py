@@ -1,5 +1,5 @@
 import enum
-import MolSpinPy.maths.tensor as tensor
+from MolSpinPy.maths import tensor
 
 class SpinObjectType(enum.Enum):
     Electron = 1
