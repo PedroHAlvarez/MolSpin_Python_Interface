@@ -1,0 +1,53 @@
+class ActionVariable:
+    def __init__(self, prop):
+        self.fget = prop.fget
+        self.fset = prop.fset
+        self.name = prop.fget.__name__
+        self.owner = None
+    def __set_name__(self,owner,name):
+        self.owner = owner
+    def __get__(self, instance, owner):
+        if instance is None:
+            return self
+        return BoundVariable(instance,self)
+    def __set__(self, instance, value):
+        if self.fset is None:
+            raise AttributeError(f"{self.name} is read-only")
+        self.fset(instance, value)
+
+
+    #def __getattr__(self, name):
+    #    return getattr(self._target, name)
+    #def __repr__(self):
+    #    return f"Wrapper"
+    
+class BoundVariable:
+    def __init__(self, instance, descriptor : ActionVariable):
+        self.instance = instance
+        self.descriptor = descriptor
+    @property
+    def value(self):
+        return self.descriptor.fget(self.instance)
+    @value.setter
+    def value(self,val):
+        if self.descriptor.fset is None:
+            raise AttributeError(f"Variable '{self.descriptor.name}' is read-only")
+        self.descriptor.fset(self.instance,val)
+    def __str__(self): return str(self.value)
+    def __repr__(self): return f"Handle({self.value})"
+
+    def __eq__(self, other): return self.value == other
+    def __lt__(self, other): return self.value < other
+    def __gt__(self, other): return self.value > other
+
+    def __new__(cls,instance,descriptor):
+        target = descriptor.fget(instance)
+        t_type = type(target)
+
+        proxy_name = f"Bound_{t_type.__name__}"
+        proxy_class = type(proxy_name, (cls,t_type), {})
+        return super(BoundVariable,proxy_class).__new__(proxy_class)
+    
+    #def __add__(self, other): return self.value + other
+    #def __radd__(self, other): return other + self.value
+    #def __float__(self, other)
