@@ -18,8 +18,10 @@ class ActionFunction:
         self._param_types = {}
 
     def __getattr__(self, name):
-        if name in self.param:
-            return self._param[name]
+        params = self.__dict__.get('_param')
+        if params is not None and name in params:
+            return params[name]
+        raise AttributeError(f"'{type(self).__name__}' object has no attribute '{name}'")
     def __setattr__(self, name, value):
         if name.startswith('_'):
             super().__setattr__(name,value)

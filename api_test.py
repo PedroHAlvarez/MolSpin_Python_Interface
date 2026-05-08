@@ -19,16 +19,16 @@ def main():
     test2 = MolSpinPy.msd.FileTemplate.get_template("BasicTemplate.msd")
     print(test2.render_to_file(dat, "output2.msd"))
 
-    @MolSpinPy.objects.ActionScript
+    @MolSpinPy.ActionScript
     def test_action_1(step,var,a):
         return var + (step * a)
-    @MolSpinPy.objects.ActionScript
+    @MolSpinPy.ActionScript
     def test_action_2(step,a : float,b : int):
         return a + step * b
-    @MolSpinPy.objects.ActionScript
+    @MolSpinPy.ActionScript
     def test_action_3(a,b):
         return a + b
-    @MolSpinPy.objects.ActionScript
+    @MolSpinPy.ActionScript
     def test_action_5(var,a,b):
         var.value = a+b
     #@MolSpinPy.objects.ActionScript
@@ -39,6 +39,7 @@ def main():
     Action = MolSpinPy.objects.Action(e1.spin,test_action_1,duration=2,interval=1, loop = True)
     Action2 = MolSpinPy.objects.Action(e1.g_tensor, test_action_2, duration = 2, interval=2, a = 5, b=3, parent = Action)
     Action3 = MolSpinPy.objects.Action(e1.spin, test_action_3, duration = 5, loop = True, a = 3, b =4, parent = Action2)
+    Action4 = MolSpinPy.objects.Action(e1.spin, MolSpinPy.objects.Actions.LineSpaceScalar(0,0.1,num=100), duration = 100, loop = True)
     #Action2.Test()
     Action.a = 1
     Action.state.a = 1
@@ -46,7 +47,8 @@ def main():
         s1 = Action.step(i,True)
         s2 = Action2.step(i,True)
         s3 = Action3.step(i, True)
-        print(f"{s1},{s2},{s3}")
+        s4 = Action4.step(i)
+        #print(f"{s1},{s2},{s3}")
     print("end of testing")
 
     
