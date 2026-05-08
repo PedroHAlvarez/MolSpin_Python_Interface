@@ -35,9 +35,21 @@ def main():
     #def test_action_4(a,b):
     #   print(a+b)
 
-    Action = MolSpinPy.objects.Action(e1.spin,test_action_1,duration=100,interval=1)
-    Action2 = MolSpinPy.objects.Action(e1.spin, test_action_2, duration = 10, interval=1, a = 5, b='hello')
+
+    Action = MolSpinPy.objects.Action(e1.spin,test_action_1,duration=2,interval=1, loop = True)
+    Action2 = MolSpinPy.objects.Action(e1.g_tensor, test_action_2, duration = 2, interval=2, a = 5, b=3, parent = Action)
+    Action3 = MolSpinPy.objects.Action(e1.spin, test_action_3, duration = 5, loop = True, a = 3, b =4, parent = Action2)
+    #Action2.Test()
+    Action.a = 1
+    Action.state.a = 1
+    for i in range(0,10000):
+        s1 = Action.step(i,True)
+        s2 = Action2.step(i,True)
+        s3 = Action3.step(i, True)
+        print(f"{s1},{s2},{s3}")
     print("end of testing")
+
+    
 
     
 

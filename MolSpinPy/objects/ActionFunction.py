@@ -5,6 +5,7 @@ from functools import wraps
 import warnings
 import ast
 import textwrap
+from types import SimpleNamespace
 
 class ActionFunction:
     def __init__(self):
@@ -12,7 +13,7 @@ class ActionFunction:
         self._step = 0
         
         self._param = {}
-        self._StoredObjects = {}
+        super().__setattr__('_state',SimpleNamespace())
         self._internal_func = None
         self._param_types = {}
 
@@ -35,6 +36,23 @@ class ActionFunction:
     def BindValues(self,value_list = [], value_dictionary = {}, source_obj = None):
         raise NotImplementedError("Sub classes should implement their own BindValues function")
     
+    @property
+    def name(self):
+        if self._internal_func:
+            return self._internal_func.__name__
+        return "UnnamedFunction"
+    @property
+    def state(self):
+        return self._state
+    @state.setter
+    def state(self, value):
+        if isinstance(value, dict):
+            self._state = SimpleNamespace(**value)
+        elif isinstance(value, SimpleNamespace):
+            self._state = value
+        else:
+            raise TypeError("State must be a dictionary or a SimpleNamespace.")
+    
 class CustomActionFunction(ActionFunction):
     def __init__(self, func = None):
         super().__init__()
@@ -51,9 +69,22 @@ class CustomActionFunction(ActionFunction):
         sig = inspect.signature(original_func)
         params = sig.parameters
 
-        if 'step' in params and params['step'].kind == inspect.Parameter.KEYWORD_ONLY:
-            raise TypeError("Parameter 'step' must be positional in your action function.")
-        self._param_names = [p for p in params if p not in ('step', 'var')]
+        core = ['step', 'var', 'state']
+        param_names = list(params.keys())
+        for i,expected in enumerate(core):
+            #if expected not in params:
+            #    raise TypeError(f"Action function is missing required argument: '{expected}'")
+            #if param_names[i] != expected:
+            #    raise TypeError(
+            #    f"Incorrect argument order. Argument #{i} must be '{expected}', "
+            #    f"but found '{param_names[i]}' instead."
+            #)
+            if expected not in params:
+                continue
+            if params[expected].kind == inspect.Parameter.KEYWORD_ONLY:
+                raise TypeError(f"'{expected}' must be a positional argument.")
+
+        self._param_names = [p for p in params if p not in ('step', 'var', 'state')]
         self._param = {
             p: params[p].default
             for p in self._param_names
@@ -125,18 +156,26 @@ class CustomActionFunction(ActionFunction):
                     self._param[key] = val
                 else:
                     break
+    def DoStep(self, var : ActionVariable):
+        result = self._internal_func(self._step, var, self.state, **self._param)
+        if result == None:
+            result = var.value
+        self._step += 1
+        return result
     
 def ActionScript(func):
     sig = inspect.signature(func)
     params = sig.parameters
 
     @wraps(func)
-    def wrapper(step,var,**kwargs):
+    def wrapper(step,var,state,**kwargs):
         valid_args = {k: v for k,v in kwargs.items() if k in params}
         if 'step' in params:
             valid_args['step'] = step
         if 'var' in params:
             valid_args['var'] = var
+        if 'state' in params:
+            valid_args['state'] = state
         return func(**valid_args)
     return CustomActionFunction(wrapper)
 
