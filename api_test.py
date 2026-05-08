@@ -40,6 +40,7 @@ def main():
     Action2 = MolSpinPy.objects.Action(e1.g_tensor, test_action_2, duration = 2, interval=2, a = 5, b=3, parent = Action)
     Action3 = MolSpinPy.objects.Action(e1.spin, test_action_3, duration = 5, loop = True, a = 3, b =4, parent = Action2)
     Action4 = MolSpinPy.objects.Action(e1.spin, MolSpinPy.objects.Actions.LineSpaceScalar(0,0.1,num=100), duration = 100, loop = True)
+    Action5 = MolSpinPy.objects.Action(dat['spinsystems']['GS']['transitions']['T0UP'], MolSpinPy.objects.Actions.LineSpaceScalar(0,0.1,num=100), duration = 100, loop = True, key = 'rate')
     #Action2.Test()
     Action.a = 1
     Action.state.a = 1
@@ -47,7 +48,8 @@ def main():
         s1 = Action.step(i,True)
         s2 = Action2.step(i,True)
         s3 = Action3.step(i, True)
-        s4 = Action4.step(i)
+        #s4 = Action4.step(i)
+        s5 = Action5.step(i)
         #print(f"{s1},{s2},{s3}")
     print("end of testing")
 

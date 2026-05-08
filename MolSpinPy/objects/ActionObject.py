@@ -34,7 +34,7 @@ class TimeManager():
             if (relative_step - act.start) % act.interval != 0: return None
         return act.func._step
 class Action():
-    def __init__(self, target : ActionVariable, func = ActionFunction.ActionFunction, **kwargs):
+    def __init__(self, target, func = ActionFunction.ActionFunction, **kwargs):
         super().__setattr__('_ACTION_ARGS',{'duration','loop','interval','active','parent'})
         super().__setattr__('_ACTION_ARGS_TYPES',{
             'duration' : int,
@@ -44,8 +44,17 @@ class Action():
             'active' : bool,
             'parent' : Action
         })
+        super().__setattr__('ptr',None)
+        super().__setattr__('key', kwargs.get('key',None))
 
-        super().__setattr__('ptr',target)
+        if isinstance(target,dict) and self.key != None:
+            self.ptr = ActionVariable.DictionaryBoundVariable(target,self.key)
+        elif isinstance(target,str):
+            self.ptr = None
+            super().__setattr__('_promise',target)
+        else:
+            self.ptr = target
+        
         super().__setattr__('func',func)
         super().__setattr__('_FUNCTION_ARGS', list(getattr(func, '_param_names', {})))
         super().__setattr__('children', [])
@@ -61,9 +70,10 @@ class Action():
         }
 
         for key, value in kwargs.items():
-            setattr(self,key,value)
+            if key != 'key':
+                setattr(self,key,value)
         for key,val in defaults.items():
-            if not hasattr(self,key):
+            if not hasattr(self,key) and key != 'key':
                 super().__setattr__(key,val)
         if self.parent:
             self.parent.add_child(self)
@@ -71,7 +81,16 @@ class Action():
     def add_child(self, child):
         if child not in self.children:
             self.children.append(child)
-    
+    def bind_to(self,target, **kwargs):
+        new_key = kwargs.get('key', self.key)
+        if isinstance(target,dict) and new_key != None:
+            self.ptr = ActionVariable.DictionaryBoundVariable(target,new_key)
+        elif isinstance(target,str):
+            self.ptr = None
+            super().__setattr__('_promise',target)
+        else:
+            self.ptr = target
+
     def __setattr__(self, name, value):
 
         def value_check(value, name):

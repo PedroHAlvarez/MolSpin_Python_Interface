@@ -20,6 +20,25 @@ class ActionVariable:
     #    return getattr(self._target, name)
     #def __repr__(self):
     #    return f"Wrapper"
+
+class DictionaryBoundVariable:
+    def __init__(self, registry, key):
+        self.registry = registry
+        self.key = key
+    #will need to change this properly to handle all the different data types
+    @property
+    def value(self):
+        val = float(self.registry[self.key])
+        return getattr(val, 'value', val)
+    @value.setter
+    def value(self,val):
+        item = self.registry[self.key]
+        if hasattr(item, 'value'):
+            item.value = val
+        else:
+            self.registry[self.key] = str(val)
+    def __repr__(self):
+        return f"DictHandle({self.key}: {self.value})"
     
 class BoundVariable:
     def __init__(self, instance, descriptor : ActionVariable):
