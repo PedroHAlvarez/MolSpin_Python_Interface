@@ -19,10 +19,25 @@ def main():
     test2 = MolSpinPy.msd.FileTemplate.get_template("BasicTemplate.msd")
     print(test2.render_to_file(dat, "output2.msd"))
 
+    @MolSpinPy.objects.ActionScript
+    def test_action_1(step,var,a):
+        return var + (step * a)
+    @MolSpinPy.objects.ActionScript
+    def test_action_2(step,a : float,b : int):
+        return a + step * b
+    @MolSpinPy.objects.ActionScript
+    def test_action_3(a,b):
+        return a + b
+    @MolSpinPy.objects.ActionScript
+    def test_action_5(var,a,b):
+        var.value = a+b
+    #@MolSpinPy.objects.ActionScript
+    #def test_action_4(a,b):
+    #   print(a+b)
 
-
-
-
+    Action = MolSpinPy.objects.Action(e1.spin,test_action_1,duration=100,interval=1)
+    Action2 = MolSpinPy.objects.Action(e1.spin, test_action_2, duration = 10, interval=1, a = 5, b='hello')
+    print("end of testing")
 
     
 
