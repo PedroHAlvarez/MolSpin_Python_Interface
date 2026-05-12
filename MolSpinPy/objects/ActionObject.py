@@ -35,7 +35,7 @@ class TimeManager():
         return act.func._step
 class Action():
     def __init__(self, target, func = ActionFunction.ActionFunction, **kwargs):
-        super().__setattr__('_ACTION_ARGS',{'duration','loop','interval','active','parent'})
+        super().__setattr__('_ACTION_ARGS',{'duration','loop','interval','active','parent'})#, 'name', 'priority', 'value', 'state', 'effective_priority'})
         super().__setattr__('_ACTION_ARGS_TYPES',{
             'duration' : int,
             'start' : int,
@@ -69,6 +69,8 @@ class Action():
             'parent' : None
         }
 
+        super().__setattr__('_priority', 0)
+
         for key, value in kwargs.items():
             if key != 'key':
                 setattr(self,key,value)
@@ -77,6 +79,24 @@ class Action():
                 super().__setattr__(key,val)
         if self.parent:
             self.parent.add_child(self)
+
+    @property
+    def name(self):
+        return self.ptr.name
+    
+    @property
+    def priority(self):
+        return self._priority
+    
+    @priority.setter
+    def priority(self,z):
+        self._priority = z
+
+    @property
+    def effective_priority(self):
+        if self.parent is None:
+            return self.priority
+        return self.parent.effective_priority
     
     def add_child(self, child):
         if child not in self.children:
@@ -104,6 +124,9 @@ class Action():
                             raise TypeError(rf"{name} must have type {expected.__name__}, "
                                             rf"but got {type(value).__name__}")
 
+        if hasattr(self, name):
+            super().__setattr__(name, value)
+            return
         if name.startswith('_') or name in ('ptr', 'func', 'children'):
             super().__setattr__(name,value)
             return
@@ -170,15 +193,26 @@ class Action():
         from copy import copy
         print(f"---Testing {self.func.name}---")
         test_var = self.ptr.value
+        test_type = type(test_var)
         state_snapshot = copy(self.func.state.__dict__)
         try:
             try:
-                result = self.func._internal_func(0,test_var,self.func.state,**self.func._param)
+                result = self.func._internal_func(0,test_var,self.func.state,**self.func._param) 
             except AttributeError as e:
                 if "SimpleNamespace" in str(e):
                     raise AttributeError(f"Action '{self.func.name}' tried to access an uninitialized state variable. ") from e
-            if result != None and not isinstance(result,type(test_var)):
+            result_type = type(result)
+            
+            #array check
+            if result_type == test_type and test_type == np.ndarray:
+                a = (len(result) == len(test_var))
+                if not a:
+                    raise ValueError(f"Dimensionality mismatch between, the return object of ActionScript: {result.shape()} and the shape of the actionVariable: {test_var.shape()}")
+
+            #final check
+            if result is not None and not isinstance(result,test_type):
                 raise ValueError(f"Type mismatch betweeen, the return object of ActionScript: {type(result).__name__} and the type of the actionVariable: {type(test_var).__name__}")
+            
             print("PASSED")
             return True
         except Exception as e:
@@ -190,3 +224,6 @@ class Action():
     @property
     def state(self):
         return self.func.state
+    @property
+    def value(self):
+        return self.ptr.value

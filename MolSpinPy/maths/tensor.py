@@ -67,6 +67,17 @@ class Tensor:
         else:
             raise ValueError("Method must be a function")
 
+def CreateTensor(input_str : str, type : str):
+    rt = None
+    if type == 'isotropic':
+        rt = Isotropic(input_str)
+    elif type == 'anisotropic':
+        rt = Anisotropic(input_str)
+    elif type == 'matrix':
+        rt = Matrix(input_str)
+    else:
+        raise ValueError("Matrix type not recognised")
+    return rt
 
 #usage example: a = Isotropic("2")
 class Isotropic(Tensor):

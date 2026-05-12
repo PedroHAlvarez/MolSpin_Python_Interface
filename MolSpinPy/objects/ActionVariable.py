@@ -1,3 +1,5 @@
+from MolSpinPy import utility
+from MolSpinPy import maths
 class ActionVariable:
     def __init__(self, prop):
         self.fget = prop.fget
@@ -25,18 +27,36 @@ class DictionaryBoundVariable:
     def __init__(self, registry, key):
         self.registry = registry
         self.key = key
+        self.name = key
+    def _get_target(self):
+        keys = self.key.split('.')
+        current = self.registry
+        for key in keys[:-1]:
+            current = current[key]
+        return current,keys[-1] if len(keys) > 1 else keys[0]
     #will need to change this properly to handle all the different data types
     @property
     def value(self):
-        val = float(self.registry[self.key])
+        container,final_key = self._get_target()
+        val = container[final_key]
+        t,v,c = utility.regex_functions.GetType(val)
+        if t == 'float':
+            val = float(val)
+        elif t == 'vec':
+            val = maths.vector.Vector(val)
+        elif t == 'matrix':
+            val = maths.tensor.CreateTensor(c,v)
+        else:
+            raise ValueError("Type not supported")
         return getattr(val, 'value', val)
     @value.setter
     def value(self,val):
-        item = self.registry[self.key]
+        container,final_key = self._get_target()
+        item = container[final_key]
         if hasattr(item, 'value'):
             item.value = val
         else:
-            self.registry[self.key] = str(val)
+            container[final_key] = str(val)
     def __repr__(self):
         return f"DictHandle({self.key}: {self.value})"
     
