@@ -46,8 +46,16 @@ def main():
     manager = MolSpinPy.runtime.ActionManager()
     manager.add_action(Action6)
     manager.add_action(Action7)
-    for i in range(0,10000):
-        manager.run(i)
+
+    test = MolSpinPy.runtime.Project("test")
+    test.attach_dict(dat)
+    test._extract_settings()
+    test.attach_ActionManager(manager)
+    test._dryRun()
+
+
+    #for i in range(0,10000):
+   #     manager.run(i)
     #Action7.Test()
     #Action.a = 1
     #Action.state.a = 1
