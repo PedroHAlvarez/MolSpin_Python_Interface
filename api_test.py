@@ -41,17 +41,18 @@ def main():
     Action3 = MolSpinPy.objects.Action(e1.spin, test_action_3, duration = 5, loop = True, a = 3, b =4, parent = Action2)
     Action4 = MolSpinPy.objects.Action(e1.spin, MolSpinPy.objects.Actions.LineSpaceScalar(0,0.1,num=100), duration = 100, loop = True)
     Action5 = MolSpinPy.objects.Action(dat['spinsystems']['GS']['transitions']['T0UP'], MolSpinPy.objects.Actions.LineSpaceScalar(0,0.1,num=100), duration = 100, loop = True, key = 'rate')
-    Action6 = MolSpinPy.objects.Action(dat, MolSpinPy.objects.Actions.LineSpaceScalar(0,0.1,num=100), duration = 100, loop = True, key = 'spinsystems.GS.transitions.T0UP.rate')
-    Action7 = MolSpinPy.objects.Action(dat, MolSpinPy.objects.Actions.LineSpaceVector(0,0.1,num=100,direction = MolSpinPy.maths.vector.Vector("0.0 1.0 0.5")), duration = 100, loop = True, key = 'spinsystems.GS.interactions.zeeman.field')
+    #Action6 = MolSpinPy.objects.Action(dat, MolSpinPy.objects.Actions.LineSpaceScalar(0,0.1,num=100), duration = 100, loop = True, key = 'spinsystems.GS.transitions.T0UP.rate')
+    Action7 = MolSpinPy.objects.Action(dat, MolSpinPy.objects.Actions.LineSpaceVector(0,0.1,num=100, direction = MolSpinPy.maths.vector.Vector("0.0 1.0 0.5")), duration = 100, loop = True, key = 'spinsystems.GS.interactions.zeeman.field')
     manager = MolSpinPy.runtime.ActionManager()
-    manager.add_action(Action6)
+    #manager.add_action(Action6)
     manager.add_action(Action7)
 
     test = MolSpinPy.runtime.Project("test")
     test.attach_dict(dat)
     test._extract_settings()
     test.attach_ActionManager(manager)
-    test._dryRun()
+    #test._dryRun()
+    test.Deploy()
 
 
     #for i in range(0,10000):

@@ -37,7 +37,7 @@ class ActionManager:
                 'step' : current_step,
                 'v' : action.value
             })
-        if current_step % self._buffer and current_step > 0:
+        if current_step % self._buffer == 0 and current_step > 0:
             self.flush()
     def flush(self):
         #currently nothing 

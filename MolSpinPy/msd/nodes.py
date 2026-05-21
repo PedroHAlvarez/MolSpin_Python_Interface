@@ -1,4 +1,5 @@
 import re
+from MolSpinPy.utility import regex_functions
 
 class Node:
     def __init__(self):
@@ -19,6 +20,7 @@ class VarNode(Node):
     def __init__(self, var_name):
         Node.__init__(self)
         self.var_name = var_name
+        self.regex_check = [regex_functions._match_vector, regex_functions._internal_brackets]
     def render(self, context):
         val = context
         for part in self.var_name.split("."):
@@ -26,9 +28,18 @@ class VarNode(Node):
                 val = val.get(part, "")
             else:
                 return f"MISSING_VAR:{self.var_name}"
+        
+        if isinstance(val, str):
+            prev_val = val
+            for fn in self.regex_check:
+                val = fn(val)
+                if val == prev_val:
+                    continue
+                else:
+                    return str(val)
         if isinstance(val, str) and ' ' in val:
-            if not (val.startswith("''") and val.endswith("''")):
-                    val = f"''{val}''"
+            if not (val.startswith('"') and val.endswith('"')):
+                    val = f'"{val}"'
         return str(val)
 class LoopNode(Node):
     def __init__(self, loop_header, loop_body):

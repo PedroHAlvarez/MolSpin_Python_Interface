@@ -108,12 +108,15 @@ SpinSystem {{ system_name }}
 	// ---------------------------------------------------------
 	// SpinSystem Properties
 	// ---------------------------------------------------------
-	Properties properties
+	{% for p_name,p in system.properties.items %}
+	Properties {{p_name}}
 	{
-        {% for key,value in system.properties.items %}
+        {% for key,value in p.items %}
 		{{ key }} = {{ value|safe }};
         {% endfor %}
 	}
+	{% endfor %}
+
     {% endif %}
 	{% if system.pulses %}
 	// ---------------------------------------------------------
@@ -149,11 +152,14 @@ Settings
 	// ---------------------------------------------------------
 	// General settings
 	// ---------------------------------------------------------
-	Settings general
+	{% for s_name,s in settings.items %}
+	Settings {{s_name}}
 	{
-        {% for key,value in settings.items %}
-		{{ key }} = {{ value|safe }};{% endfor %}
+        {% for key,value in s.items %}
+		{{ key }} = {{ value|safe }};
+		{% endfor %}
 	}
+	{% endfor %}
 	{% endif %}
     {% if actions %}
 	// ---------------------------------------------------------

@@ -17,6 +17,48 @@ def tensor_input(tensor_str, bool = False):
         else:
             return False
 
+def _match_vector(val):
+    pattern = r'^\s*\[.*?\]\s*$'
+    if re.match(pattern,val):
+        cleaned_str = val.strip().lstrip('[').rstrip(']')
+        elements = cleaned_str.split()
+        cleaned = []
+        for item in elements:
+            if item.endswith('.'):
+                item += '0'
+            cleaned.append(item)
+        val = ' '.join(cleaned)
+        val = rf'"{val}"'
+    return val
+
+def _internal_brackets(val):
+    keywords = ["matrix", "anisotropic"]
+    found = None
+    for keyword in keywords:
+        if keyword in val:
+            found = keyword
+    if found is not None:
+        match = re.search(rf'{found}\s*\(\s*\'*\"*\s*(.*?)\s*\'*\"*\s*\)', val)
+        if match:
+            inner_content = match.group(1).strip()
+        else:
+            return val
+        if found == keywords[0]:
+            rows = inner_content.split(';')
+            cleaned_rows = []
+            for row in rows:
+                elements = row.split()
+                cleaned_elements = [el + '0' if el.endswith('.') else el for el in elements]
+                cleaned_rows.append(' '.join(cleaned_elements))
+            sanitized_inner = ' ; '.join(cleaned_rows)
+        matrix_match = re.search(r'matrix\s*\(\s*\'*\"*\s*(.*?)\s*\'*\"*\s*\)', val)
+        if found == keywords[1]:
+            elements = inner_content.split()
+            sanitized_inner = ' '.join([el + '0' if el.endswith('.') else el for el in elements])
+        val = f'{found}("{sanitized_inner}")'
+    return val
+
+
 def vector_input(vector_str):
     #pattern = r'^[-+]?\d*\.?\d+(?:[eE][-+]?\d+)?\s+[-+]?\d*\.?\d+(?:[eE][-+]?\d+)?\s+[-+]?\d*\.?\d+(?:[eE][-+]?\d+)?$'
     #pattern = r'^\[?\s*([-+]?\d*\.?\d+(?:[eE][-+]?\d+)?(?:\s+[-+]?\d*\.?\d+(?:[eE][-+]?\d+)?){2})\s*\]?$'

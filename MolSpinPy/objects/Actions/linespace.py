@@ -24,7 +24,7 @@ class LineSpaceScalar(ActionFunction.ActionFunction):
     def DoStep(self, var):
         val = self.logic(self._step, var, self._state, self.sequence)
         self._step += 1
-        print(val)
+        #print(val)
         return val
     
 from MolSpinPy.maths.vector import Vector
@@ -57,7 +57,7 @@ class LineSpaceVector(ActionFunction.ActionFunction):
     def DoStep(self, var):
         val = self.logic(self._step, var, self._state, self.sequence)
         self._step += 1
-        print(val)
+        #print(val)
         return val
     
 #class LineSpaceTensor(ActionFunction.ActionFunction):
