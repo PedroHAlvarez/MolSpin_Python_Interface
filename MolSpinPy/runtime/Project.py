@@ -2,6 +2,7 @@
 
 from . import ActionManager
 from ..msd import FileTemplate , MsdHandling, MSDWriter
+from .RemoteDeploy import RemoteHpcOrchestrator
 import enum
 import copy
 import queue
@@ -26,6 +27,7 @@ class Project():
         self._resolved_dict = {} #this is a combination of the base_dict and the compiled_dict
         
         self._manager = None
+        self._hpc = None
         self._settings = {} #will be upgraded to a class in future versions 
         self._template = FileTemplate.get_template(template_structure)
         self._dict_template = FileTemplate._init_input_data()
@@ -121,6 +123,9 @@ class Project():
     @property 
     def MSDdict(self):
         return self._base_dict
+    @property
+    def name(self):
+        return self._name
     
     @staticmethod
     def _VerifySingleFile(file_path, instance):
@@ -156,7 +161,8 @@ class Project():
                     found_matches.append(os.path.abspath(full_path))
         return list(set(found_matches))
     
-    def _is_valid_molspin_dir(self, full_path):
+    @staticmethod
+    def _is_valid_molspin_dir(full_path):
         if not full_path or not os.path.exists(full_path) or not os.path.isfile(full_path):
             return False
             
@@ -189,30 +195,30 @@ class Project():
             if os.path.exists(full_path) and os.path.isfile(full_path):
                 return os.path.abspath(full_path)
 
-        current_search_dir = os.path.abspath(os.getcwd())
-
-        for _ in range(4):
-            potential_subdirs = [
-                os.path.join(current_search_dir, "molspin"),
-                os.path.join(current_search_dir, "MolSpin"),
-                current_search_dir
-            ]
-
-            for subdir in potential_subdirs:
-                if os.path.exists(subdir) and os.path.isdir(subdir):
-
-                    for sub_target in [subdir, os.path.join(subdir, "bin"), os.path.join(subdir, "build")]:
-                        full_path = os.path.join(sub_target, binary_name)
-                        if os.path.exists(full_path) and os.path.isfile(full_path):
-                            return os.path.abspath(full_path)
-
-
-            parent_dir = os.path.dirname(current_search_dir)
-            if parent_dir == current_search_dir:
-                break
-            current_search_dir = parent_dir
-
-        return None
+        #current_search_dir = os.path.abspath(os.getcwd())
+#
+        #for _ in range(4):
+        #    potential_subdirs = [
+        #        os.path.join(current_search_dir, "molspin"),
+        #        os.path.join(current_search_dir, "MolSpin"),
+        #        current_search_dir
+        #    ]
+#
+        #    for subdir in potential_subdirs:
+        #        if os.path.exists(subdir) and os.path.isdir(subdir):
+#
+        #            for sub_target in [subdir, os.path.join(subdir, "bin"), os.path.join(subdir, "build")]:
+        #                full_path = os.path.join(sub_target, binary_name)
+        #                if os.path.exists(full_path) and os.path.isfile(full_path):
+        #                    return os.path.abspath(full_path)
+#
+#
+        #    parent_dir = os.path.dirname(current_search_dir)
+        #    if parent_dir == current_search_dir:
+        #        break
+        #    current_search_dir = parent_dir
+#
+        #return None
     
     def VerifyIntegrity(self, output_dir, expected_steps, file_prefix):
         print(f"\n--- Verifying file creation for '{output_dir}' ---")
@@ -240,7 +246,7 @@ class Project():
 
 
         print("-------------------------------------------------")
-        print(f"Verification Summary: Audited {len(files_to_check)} sampled files across {max_workers} threads.")
+        print(f"Verification Summary: Sampled {len(files_to_check)} files")
         if not failed_reports:
             print("SUCCESS: All checked MSD files passed validation")
             return True
@@ -303,7 +309,7 @@ class Project():
         completed_counter = 0
         progress_lock = threading.Lock()
         total_files = len(msd_files)
-
+        bar_length = 50
 
         def update_progress():
             nonlocal completed_counter
@@ -316,14 +322,13 @@ class Project():
                 if pace > 0:
                     remaining_files = total_files - completed_counter
                     ete_seconds = remaining_files / pace
-                    # Format ETE to mm:ss or hh:mm:ss
                     ete_str = time.strftime("%H:%M:%S", time.gmtime(ete_seconds))
                 else:
                     ete_str = "--:--:--"
 
                 elapsed_str = time.strftime("%H:%M:%S", time.gmtime(elapsed))
 
-                bar_length = 50
+                #bar_length = 50
                 filled_length = int(round(bar_length * completed_counter / float(total_files)))
                 percent = (completed_counter / float(total_files)) * 100
                 bar = '█' * filled_length + '-' * (bar_length - filled_length)
@@ -334,7 +339,7 @@ class Project():
                 )
                 sys.stdout.flush()
 
-        sys.stdout.write(f"Deploying Experiment: [{' ' * 50}] 0/{total_files} (0.0%) | Time: 00:00:00 < Remaining: --:--:--\r")
+        sys.stdout.write(f"Deploying Experiment: [{' ' * bar_length}] 0/{total_files} (0.0%) | Time: 00:00:00 < Remaining: --:--:--\r")
         sys.stdout.flush()
         
         if parallel:
@@ -430,17 +435,6 @@ class Project():
             workers.append(t)
 
         print(f"Deploying Project {self._name} : Creating {steps} MSD files")
-        #base_dict = copy.deepcopy(self._resolved_dict)
-        #molspin_root_dir = os.path.dirname(os.path.abspath(self._executable_path))
-        #ms_output_dir = os.path.join(molspin_root_dir, self._name)
-
-        #if os.path.exists(ms_output_dir):
-        #    print(f"Wiping old deployment data at target installation workspace: '{ms_output_dir}'")
-        #    shutil.rmtree(ms_output_dir)
-            
-        #print(f"Creating fresh isolated simulation workspace folder at: '{ms_output_dir}'")
-        #os.makedirs(ms_output_dir, exist_ok=True)
-
         for i in range(steps):
             self.manager.run(i)
 
@@ -484,3 +478,41 @@ class Project():
         if not execution_clear:
             raise RuntimeError("Deployment pipeline halted: Anomalies caught during MolSpin processing execution.")
         
+    def SubmitToHPC(self, hpc_username, hpc_host, hpc_key_path, remote_binary_path, remote_working_dir, **kwargs):
+        if self._hpc == None:
+            self._hpc = RemoteHpcOrchestrator(hpc_username, hpc_host, hpc_key_path, kwargs.get('proxy_host'))
+            self._hpc.remote_working_dir = remote_working_dir
+        return
+
+        if self._resolved_dict == {}:
+            self._resolved_dict = self._base_dict
+        
+        job_id = self._hpc.execute_remote_deployment(
+            project_name=self.name,
+            steps=int(self._settings.get('steps', 1)),
+            resolved_dict=copy.deepcopy(self._resolved_dict),
+            manager=self._manager,
+            remote_binary_path=remote_binary_path,
+            remote_working_dir=remote_working_dir,
+            partition=kwargs.get('partition', 'medium'),
+            walltime=kwargs.get('walltime', '00:30:00'),
+            calcs_per_node=kwargs.get('calcs_per_node', 16),
+            template=self._template
+        )
+        return job_id
+    
+    def WatchHPC(self, job_id):
+        if self._hpc == None:
+            return RuntimeError("No HPC project found")
+        self._hpc.watch_hpc_job(job_id=job_id, total_tasks=self._settings['steps'],poll_interval=5)
+    
+    def DownloadFromHPC(self, job_id, remote_working_dir, local_npz_output_path):
+        #orchestrator = RemoteHpcOrchestrator(hpc_username, hpc_host, hpc_key_path, proxy_host)
+        if self._hpc == None:
+            return RuntimeError("No HPC project found")
+        return self._hpc.download_remote_deployment(
+            project_name=self.name,
+            remote_working_dir=remote_working_dir,
+            local_npz_path=local_npz_output_path,
+            job_id=job_id
+        )

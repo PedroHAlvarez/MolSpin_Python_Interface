@@ -52,11 +52,13 @@ def main():
     test._extract_settings()
     test.attach_ActionManager(manager)
     #test._dryRun()
-    test.Deploy()
-
-
-    #for i in range(0,10000):
-   #     manager.run(i)
+    #test.Deploy()
+    id = test.SubmitToHPC(hpc_username="u28375",hpc_host="glogin-p2.hpc.gwdg.de",
+    hpc_key_path="~/.ssh/id_ed25519", remote_binary_path="/projects/extern/nhr/nhr_ni/nip00058/dir.project/MolSpin/MolSpin",
+    remote_working_dir="/user/benjamin.tigg/u28375", calcs_per_node=20, partition="medium96s:test")
+    id= 13921951
+    test.WatchHPC(id)
+    test.DownloadFromHPC(id, remote_working_dir="/user/benjamin.tigg/u28375", local_npz_output_path="results/")
     #Action7.Test()
     #Action.a = 1
     #Action.state.a = 1

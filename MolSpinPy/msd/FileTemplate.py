@@ -1,5 +1,6 @@
 import os
 import re
+import paramiko
 
 from . import nodes
 
@@ -17,6 +18,10 @@ class FileTemplate:
     def render_to_file(self, context, output_path):
         rendered_content = self.render(context)
         with open(output_path, "w") as f:
+            f.write(rendered_content)
+    def render_to_file_ssh(self, context, output_path, sftp : paramiko.sftp_client):
+        rendered_content = self.render(context)
+        with sftp.file(output_path, 'w') as f:
             f.write(rendered_content)
     def compile_template(self):
         self.raw_text = re.sub(r"{% comment %}.*?{% endcomment %}", "", self.raw_template, flags=re.DOTALL)
