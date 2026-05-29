@@ -6,3 +6,5 @@
 _pycache_\*
 .vscode
 *.tar.gz
+*.npz
+*.out

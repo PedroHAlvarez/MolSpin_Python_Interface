@@ -14,7 +14,9 @@ class TextNode(Node):
         Node.__init__(self)
         self.text = text
     def render(self, context = None):
-        return self.text
+        case_map = context.get("__case_map", {})
+        display_name = case_map.get(self.text.lower(), self.text)
+        return display_name
 
 class VarNode(Node):
     def __init__(self, var_name):
@@ -23,6 +25,7 @@ class VarNode(Node):
         self.regex_check = [regex_functions._match_vector, regex_functions._internal_brackets]
     def render(self, context):
         val = context
+        case_map = context.get("__case_map", {})
         for part in self.var_name.split("."):
             if isinstance(val, dict):
                 val = val.get(part, "")
@@ -40,7 +43,8 @@ class VarNode(Node):
         if isinstance(val, str) and ' ' in val:
             if not (val.startswith('"') and val.endswith('"')):
                     val = f'"{val}"'
-        return str(val)
+        display_val = case_map.get(str(val).lower(), str(val))         
+        return display_val
 class LoopNode(Node):
     def __init__(self, loop_header, loop_body):
         Node.__init__(self)

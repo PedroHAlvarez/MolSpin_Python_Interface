@@ -8,6 +8,7 @@ import math
 import sys
 import time
 import io
+import re
 
 from . import ActionManager
 from ..msd import FileTemplate , MsdHandling, MSDWriter
@@ -20,15 +21,72 @@ class RemoteHpcOrchestrator:
         self.proxy_host = proxy_host
         self.remote_working_dir = None
 
+    @staticmethod
+    def calculate_hpc_schedule(total_tasks, max_nodes=5, max_concurrent=20, 
+                           est_single_job_hours=20.0, max_walltime_hours=48.0, 
+                           safety_buffer=1.2):
+        
+        total_concurrent_capacity = max_nodes * max_concurrent
+        total_waves_needed = math.ceil(total_tasks / max_concurrent / max_nodes)
+        buffered_job_time = est_single_job_hours * safety_buffer
+        max_safe_waves_per_allocation = math.floor(max_walltime_hours / buffered_job_time)
+        if max_safe_waves_per_allocation < 1:
+            raise ValueError( f"A single simulation with buffer ({buffered_job_time}h) "
+            f"exceeds the partition limit ({max_walltime_hours}h)")
+
+        print(f"--- HPC Scheduling Evaluation ---")
+        print(f"Total tasks to run: {total_tasks}")
+        print(f"Estimated single job duration (with buffer): {buffered_job_time:.2f} hours")
+        print(f"Max safe consecutive waves per SLURM job: {max_safe_waves_per_allocation}")
+
+        batches = []
+        tasks_remaining = total_tasks
+
+        while tasks_remaining > 0:
+            max_tasks_for_this_batch = total_concurrent_capacity * max_safe_waves_per_allocation
+            batch_tasks = min(tasks_remaining, max_tasks_for_this_batch)
+
+            if batch_tasks <= total_concurrent_capacity:
+                batch_nodes = math.ceil(batch_tasks / max_concurrent)
+                batch_calcs_per_node = max_concurrent
+                batch_waves = 1
+            else:
+                batch_nodes = max_nodes
+                batch_calcs_per_node = math.ceil(batch_tasks / max_nodes)
+                batch_waves = math.ceil(batch_calcs_per_node / max_concurrent)
+
+            batch_walltime_hours = math.ceil(batch_waves * buffered_job_time)
+            walltime_str = f"{batch_walltime_hours:02d}:00:00"
+
+            batches.append({
+                "tasks_in_batch": batch_tasks,
+                "nodes": batch_nodes,
+                "calcs_per_node": batch_calcs_per_node,
+                "walltime": walltime_str
+            })
+
+            tasks_remaining -= batch_tasks
+
+        return batches
+
     def _generate_slurm_script(self, remote_results_dir, remote_logs_dir, remote_binary_path, 
-                            partition, walltime, total_tasks, project_name, cal_per_node):
-        total_array_nodes = math.ceil(total_tasks / cal_per_node)
+                           partition, walltime, total_tasks, project_name, max_concurrent, 
+                           calcs_per_node, total_array_nodes):
+        print(f"--- Generating Slurm Script Blueprint ---")
+        print(f" - Batch Project Suffix: {project_name}")
+        print(f" - Active Walltime Limit: {walltime}")
+        print(f" - Array Width (Nodes Requested): 1-{total_array_nodes}")
+        print(f" - Max Concurrent Processes per Node: {max_concurrent}")
+        print(f" - Total Calculations Assigned to each Node: {calcs_per_node}\n")
+
+        cal_per_node = calcs_per_node
+
         script = f"""#!/bin/bash
 #SBATCH --job-name=molspin_python_{project_name}
 #SBATCH --partition={partition}
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task={cal_per_node}
+#SBATCH --cpus-per-task={max_concurrent}
 #SBATCH --time={walltime}
 #SBATCH --array=1-{total_array_nodes}
 #SBATCH --output={remote_logs_dir}/array_%A_%a.out
@@ -41,6 +99,7 @@ module load netlib-lapack
 
 cd {remote_results_dir}
 CALCS_PER_NODE={cal_per_node}
+MAX_CONCURRENT={max_concurrent}
 START_LINE=$(((SLURM_ARRAY_TASK_ID - 1) * CALCS_PER_NODE + 1))
 END_LINE=$((SLURM_ARRAY_TASK_ID * CALCS_PER_NODE))
 
@@ -50,6 +109,10 @@ for (( line_idx=$START_LINE; line_idx<=$END_LINE; line_idx++ )); do
         echo "Reached end of job map"
         break
     fi
+
+    while [ $(jobs -rp | wc -l) -ge $MAX_CONCURRENT ]; do
+        sleep 1
+    done
 
     NODE_LOCAL_DIR="/tmp/molspin_${{SLURM_ARRAY_JOB_ID}}_${{SLURM_ARRAY_TASK_ID}}_core_${{line_idx}}"
     mkdir -p "$NODE_LOCAL_DIR"
@@ -92,14 +155,14 @@ if [ "$SLURM_ARRAY_TASK_ID" -eq "$((SLURM_ARRAY_TASK_COUNT - 1))" ]; then
     cd "{remote_results_dir}"
     
     echo "All files verified on disk! Launching compute-node compression"
-    tar -cf "$PARENT_DIR/workspace_$SLURM_ARRAY_JOB_ID.tar" *.dat *.log"
+    tar -cf "$PARENT_DIR/workspace_$SLURM_ARRAY_JOB_ID.tar" *.dat *.log
     echo "Tarball created successfully at: $PARENT_DIR/workspace_$SLURM_ARRAY_JOB_ID.tar"
 fi
 """
         return script
 
     def execute_remote_deployment(self, steps, resolved_dict, project_name, manager, template : FileTemplate.FileTemplate, 
-                                  remote_binary_path, remote_working_dir,partition, walltime,calcs_per_node):
+                                  remote_binary_path, remote_working_dir,partition, walltime,calcs_per_node,max_nodes, **kwargs):
         
         hpc_ssh = self._connect()
         sftp = hpc_ssh.open_sftp()
@@ -134,49 +197,97 @@ fi
             f.write("\n".join(msd_filenames) + "\n")
 
         total_tasks = len(msd_filenames)
-        slurm_template = self._generate_slurm_script(
-            remote_results_dir=remote_results_dir,
-            remote_logs_dir=remote_logs_dir,
-            remote_binary_path=remote_binary_path,
-            partition=partition,
-            walltime=walltime,
-            total_tasks=total_tasks,
-            cal_per_node=calcs_per_node,
-            project_name=project_name
-        )
+        
+        batches = self.calculate_hpc_schedule(total_tasks=total_tasks, max_nodes=max_nodes, max_concurrent=calcs_per_node, 
+                                                     est_single_job_hours=kwargs.get('est_sim_time', 20),
+                                                     max_walltime_hours=kwargs.get('max_walltime_hours', 48),
+                                                        safety_buffer=kwargs.get('safety_buffer', 1.2))
+        submitted_job_ids = []
+        last_job_id = None
+        for i, batch in enumerate(batches):
+            batch_index = i + 1
+            print(f"\n--- Provisioning Batch {batch_index}/{len(batches)} ---")
+        
+            slurm_template = self._generate_slurm_script(
+                remote_results_dir=remote_results_dir,
+                remote_logs_dir=remote_logs_dir,
+                remote_binary_path=remote_binary_path,
+                partition=partition,
+                walltime=batch['walltime'],             
+                total_tasks=total_tasks,
+                project_name=f"{project_name}_b{batch_index}",
+                max_concurrent=calcs_per_node,          
+                calcs_per_node=batch['calcs_per_node'], 
+                total_array_nodes=batch['nodes']
+)
 
-        with sftp.file(f"{remote_results_dir}/submit_pipeline.slurm", 'w') as f:
-            f.write(slurm_template)
+            script_filename = f"submit_batch_{batch_index}.sh"
+            remote_script_path = f"{remote_working_dir}/{script_filename}"
+            with sftp.file(remote_script_path, 'w') as f:
+                f.write(slurm_template)
+            #sftp.chmod(remote_script_path, 0o755)
+
+            submit_cmd = "sbatch "
+            if last_job_id:
+                submit_cmd += f"--dependency=afterok:{last_job_id}_%a "
+            submit_cmd += remote_script_path
+
+            _, stdout, stderr = hpc_ssh.exec_command(submit_cmd)
+            output_str = stdout.read().decode('utf-8')
+            error_str = stderr.read().decode('utf-8')
+            match = re.search(r"Submitted batch job (\d+)", output_str)
+            if match:
+                current_job_id = match.group(1)
+                submitted_job_ids.append(current_job_id)
+                last_job_id = current_job_id
+                print(f"Successfully queued Batch {batch_index} | Slurm ID: {current_job_id}")
+            else:
+                print(f"Error executing batch script {script_filename} on HPC.")
+                print(f"HPC Diagnostics: {error_str}")
+                return None
+
         sftp.close()
-
-        _, stdout, stderr = hpc_ssh.exec_command(f"sbatch {remote_results_dir}/submit_pipeline.slurm")
-        submission_output = stdout.read().decode().strip()
-        job_id = "".join(filter(str.isdigit, submission_output))
-        
-        if not job_id:
-            raise RuntimeError(f"Slurm rejected: {stderr.read().decode().strip()}")
-        
         hpc_ssh.close()
-        print(f"\n Payload safely deployed to cluster grid! Slurm Job ID: {job_id}")
+
+        #with sftp.file(f"{remote_results_dir}/submit_pipeline.slurm", 'w') as f:
+        #    f.write(slurm_template)
+        #sftp.close()
+#
+        #_, stdout, stderr = hpc_ssh.exec_command(f"sbatch {remote_results_dir}/submit_pipeline.slurm")
+        #submission_output = stdout.read().decode().strip()
+        #job_id = "".join(filter(str.isdigit, submission_output))
+        #
+        #if not job_id:
+        #    raise RuntimeError(f"Slurm rejected: {stderr.read().decode().strip()}")
+        #
+        #hpc_ssh.close()
+        #print(f"\n Payload safely deployed to cluster grid! Slurm Job ID: {job_id}")
         print("You can now safely disconnect your internet, close your laptop, or turn off your PC.")
-        return job_id
+        print(f"\nJob IDs: {submitted_job_ids}")
+        return submitted_job_ids
     
-    def download_remote_deployment(self, project_name, remote_working_dir, local_npz_path, job_id):
+    def download_remote_deployment(self, project_name, remote_working_dir, local_npz_path, job_ids):
         hpc_ssh = self._connect()
-        _, sq_out, _ = hpc_ssh.exec_command(f"squeue -j {job_id} -h")
+        if isinstance(job_ids, str):
+            job_ids = [job_ids]
+        jobs_comma_separated = ",".join(job_ids)
+        _, sq_out, _ = hpc_ssh.exec_command(f"squeue -j {jobs_comma_separated} -h")
         active_jobs = sq_out.read().decode().strip()
 
         if active_jobs:
-            remaining_nodes = len(active_jobs.split("\n"))
+            remaining_lines = active_jobs.split("\n")
             hpc_ssh.close()
-            print(f"Cluster update: Job {job_id} is STILL RUNNING. {remaining_nodes} array node blocks active.")
-            print("Run the download method again later.")
-            return False
+            print(f"\n[Cluster Update]: Active Jobs found in queue ({len(remaining_lines)} rows matching).")
+            print("Run download method later.")
+            return False        
         
-        print(f"Job {job_id} is complete! Starting download")
+        print(f"\n[Success]: All tracked jobs ({jobs_comma_separated}) have finished computing!")
+        
+        #print(f"Job {job_id} is complete! Starting download")
         #remote_tar_path = f"{remote_working_dir.rstrip('/')}/workspace_{job_id}.tar"
         remote_tar_path = f"{remote_working_dir.rstrip('/')}/workspace_$SLURM_ARRAY_JOB_ID.tar"
         remote_results_dir = f"{remote_working_dir.rstrip('/')}/molspin_run_workspace"
+        parent_dir = os.path.dirname(remote_results_dir)
         local_temp_tar = rf"./{project_name}.tar.gz"
         transport = hpc_ssh.get_transport()
         if transport is not None:
@@ -193,21 +304,21 @@ fi
             return False
         
         try:
-            all_files = sftp.listdir(remote_results_dir)
-            target_files = sorted([f for f in all_files if f.endswith('.dat')])
+            all_files = sftp.listdir(parent_dir)
+            tar_files = [f for f in all_files if f.startswith("workspace_") and f.endswith(".tar")]
         except IOError:
             print("Error: Unable to scan remote workspace directory files.")
             sftp.close()
             hpc_ssh.close()
             return False
         
-        if not target_files:
-            print("No output .dat result files")
+        if not tar_files:
+            print("No output .tar result files")
             sftp.close()
             hpc_ssh.close()
             return False
         
-        print(f"Found {len(target_files)} datasets")
+        print(f"Found {len(tar_files)} .tar files")
         #print("Archiving and compressing remote .dat files on HPC")
         #tar_cmd = f"tar -czf {remote_tar_path} -C {os.path.dirname(remote_results_dir)} molspin_run_workspace"
         #stdin, stdout, stderr = hpc_ssh.exec_command(tar_cmd)
@@ -239,17 +350,21 @@ fi
             sys.stdout.write(msg)
             sys.stdout.flush()
 
-        try:
-            print(f"\nDownloading .tar file")
-            sftp.get(remotepath=remote_tar_path, localpath=local_temp_tar, callback=ProgressStats)
-            print()
-        except Exception as e:
-            print(f"\nDownload stream failed: {e}")
-            sftp.close()
-            hpc_ssh.close()
-            return False
+        for tar_file in tar_files:
+            try:
+                print(f"\nPulling down: {tar_file}")
+                specific_remote_tar = f"{parent_dir.rstrip('/')}/{tar_file}"
+                specific_local_tar = rf"./{os.path.splitext(tar_file)[0]}_{project_name}.tar"
+                sftp.get(remotepath=specific_remote_tar, localpath=specific_local_tar, callback=ProgressStats)
+                print()
+            except Exception as e:
+                print(f"\n[Critical Failure] Download stream broken for {tar_file}: {e}")
+                sftp.close()
+                hpc_ssh.close()
+                return False
+    
         print("Cleaning up remote HPC workspace and tarball archive files")
-        cleanup_cmd = f"rm -rf {remote_results_dir} {remote_tar_path}"
+        cleanup_cmd = f"rm -rf {remote_results_dir} {parent_dir.rstrip('/')}/workspace_*.tar"
         stdin, stdout, stderr = hpc_ssh.exec_command(cleanup_cmd)
         stdout.channel.recv_exit_status()
         print("Remote workspace scrub complete")
@@ -263,7 +378,14 @@ fi
         return True
     
     def watch_hpc_job(self, job_id, total_tasks, poll_interval=5):
-        print(f"Initializing live monitor for Slurm Job: {job_id}")
+
+        if isinstance(job_id, str):
+            job_id = [job_id]
+
+        print(f"Initializing live monitor for Slurm Jobs: {', '.join(job_id)}")
+
+        remote_working_dir = f"/{self.remote_working_dir.strip('/')}"
+        remote_results_dir = f"{remote_working_dir}/molspin_run_workspace"
         
         remote_results_dir = f"{self.remote_working_dir.rstrip('/')}/molspin_run_workspace"
         
@@ -295,7 +417,8 @@ fi
                             start_time = time.time()
                         sys.stdout.flush()
 
-                    _, stdout, _ = hpc_ssh.exec_command(f"squeue -j {job_id} -h")
+                    jobs_comma_separated = ",".join(job_id)
+                    _, stdout, _ = hpc_ssh.exec_command(f"squeue -j {jobs_comma_separated} -h")
                     squeue_output = stdout.read().decode().strip()
 
                     try:
@@ -304,7 +427,7 @@ fi
                     except IOError:
                         pass
 
-                    percent = (completed_tasks / total_tasks) * 100
+                    percent = (completed_tasks / total_tasks) * 100 if total_tasks > 0 else 0
                     filled_blocks = int(round(bar_length * completed_tasks / float(total_tasks)))
                     bar = '█' * filled_blocks + '-' * (bar_length - filled_blocks)
 

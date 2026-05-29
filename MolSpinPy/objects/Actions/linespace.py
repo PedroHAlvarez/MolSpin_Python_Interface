@@ -10,8 +10,8 @@ class LineSpaceScalar(ActionFunction.ActionFunction):
         self._param_names = ['sequence']
         self.sequence = np.linspace(start,stop,num)
         self._param['sequence'] = self.sequence 
-        self._internal_func = self.logic
-    def logic(self, step, var, state, sequence):
+        self._internal_func = self.LineSpaceScalerLogic
+    def LineSpaceScalerLogic(self, step, var, state, sequence):
         if step == 0:
             state.index = 0
         if state.index == len(sequence):
@@ -22,14 +22,14 @@ class LineSpaceScalar(ActionFunction.ActionFunction):
             return val
         return var.value
     def DoStep(self, var):
-        val = self.logic(self._step, var, self._state, self.sequence)
+        val = self.LineSpaceScalerLogic(self._step, var, self._state, self.sequence)
         self._step += 1
         #print(val)
         return val
     
 from MolSpinPy.maths.vector import Vector
 class LineSpaceVector(ActionFunction.ActionFunction):
-    def __init__(self, start, stop, num = None, spacing = None, direction : Vector = None):
+    def __init__(self, start, stop, num = None, spacing = None, direction : Vector = None, Normalize = True):
         super().__init__()
         if direction == None:
             direction = Vector("0.0 0.0 1.0")
@@ -40,10 +40,11 @@ class LineSpaceVector(ActionFunction.ActionFunction):
         self._param_names = ['sequence']
         self.sequence = np.linspace(start,stop,num)
         self._param['sequence'] = self.sequence 
-        self._internal_func = self.logic
-        direction.norm1()
+        self._internal_func = self.LineSpaceVectorLogic
+        if(Normalize):
+            direction.norm1()
         self._direction = direction
-    def logic(self, step, var, state, sequence):
+    def LineSpaceVectorLogic(self, step, var, state, sequence):
         if step == 0:
             state.index = 0
         if state.index == len(sequence):
@@ -55,7 +56,7 @@ class LineSpaceVector(ActionFunction.ActionFunction):
             return val.value
         return var.value
     def DoStep(self, var):
-        val = self.logic(self._step, var, self._state, self.sequence)
+        val = self.LineSpaceVectorLogic(self._step, var, self._state, self.sequence)
         self._step += 1
         #print(val)
         return val

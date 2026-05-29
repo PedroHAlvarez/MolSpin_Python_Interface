@@ -15,7 +15,7 @@ def main():
     a = ss.ConvertToDictionary()
     print(a)
 
-    dat = MolSpinPy.msd.MsdHandling.ConvertMSDtoDictionary("NV_centre_N14_base.msd")
+    dat = MolSpinPy.msd.MsdHandling.ConvertMSDtoDictionary("NV_centre_N14_GS_T-0.msd")
     test2 = MolSpinPy.msd.FileTemplate.get_template("BasicTemplate.msd")
     print(test2.render_to_file(dat, "output2.msd"))
 
@@ -36,29 +36,34 @@ def main():
     #   print(a+b)
 
 
-    Action = MolSpinPy.objects.Action(e1.spin,test_action_1,duration=2,interval=1, loop = True)
-    Action2 = MolSpinPy.objects.Action(e1.g_tensor, test_action_2, duration = 2, interval=2, a = 5, b=3, parent = Action)
-    Action3 = MolSpinPy.objects.Action(e1.spin, test_action_3, duration = 5, loop = True, a = 3, b =4, parent = Action2)
-    Action4 = MolSpinPy.objects.Action(e1.spin, MolSpinPy.objects.Actions.LineSpaceScalar(0,0.1,num=100), duration = 100, loop = True)
-    Action5 = MolSpinPy.objects.Action(dat['spinsystems']['GS']['transitions']['T0UP'], MolSpinPy.objects.Actions.LineSpaceScalar(0,0.1,num=100), duration = 100, loop = True, key = 'rate')
+    #Action = MolSpinPy.objects.Action(e1.spin,test_action_1,duration=2,interval=1, loop = True)
+    #Action2 = MolSpinPy.objects.Action(e1.g_tensor, test_action_2, duration = 2, interval=2, a = 5, b=3, parent = Action)
+    #Action3 = MolSpinPy.objects.Action(e1.spin, test_action_3, duration = 5, loop = True, a = 3, b =4, parent = Action2)
+    #Action4 = MolSpinPy.objects.Action(e1.spin, MolSpinPy.objects.Actions.LineSpaceScalar(0,0.1,num=100), duration = 100, loop = True)
+    #Action5 = MolSpinPy.objects.Action(dat['spinsystems']['GS']['transitions']['T0UP'], MolSpinPy.objects.Actions.LineSpaceScalar(0,0.1,num=100), duration = 100, loop = True, key = 'rate')
     #Action6 = MolSpinPy.objects.Action(dat, MolSpinPy.objects.Actions.LineSpaceScalar(0,0.1,num=100), duration = 100, loop = True, key = 'spinsystems.GS.transitions.T0UP.rate')
-    Action7 = MolSpinPy.objects.Action(dat, MolSpinPy.objects.Actions.LineSpaceVector(0,0.1,num=100, direction = MolSpinPy.maths.vector.Vector("0.0 1.0 0.5")), duration = 100, loop = True, key = 'spinsystems.GS.interactions.zeeman.field')
+    #Action7 = MolSpinPy.objects.Action(dat, MolSpinPy.objects.Actions.LineSpaceVector(0,0.1,num=100, direction = MolSpinPy.maths.vector.Vector("0.0 1.0 0.5")), duration = 100, loop = True, key = 'spinsystems.GS.interactions.zeeman.field')
+    StrainModAction = MolSpinPy.objects.Action(dat, MolSpinPy.objects.Actions.LogSpaceVector(start = 5e-6, stop = 5e-2, num = 100, Exponent = False, Normalize = False,direction = MolSpinPy.maths.vector.Vector("1.0 1.0 1.0")), duration = 100, loop = True, key = 'spinsystems.GS.interactions.strain.e')
+    StrainFixedAction = MolSpinPy.objects.Action(dat, MolSpinPy.objects.Actions.LogSpaceVector(start = 1e-5, stop = 1e-1, num = 100, Exponent = False, Normalize = False, direction = MolSpinPy.maths.vector.Vector("1.0 1.0 1.0")), duration = 100, loop = True, key = 'spinsystems.GS.interactions.strain_modulated.e')
     manager = MolSpinPy.runtime.ActionManager()
+    manager.add_action(StrainModAction)
+    manager.add_action(StrainFixedAction)
     #manager.add_action(Action6)
-    manager.add_action(Action7)
+    #manager.add_action(Action7)
 
     test = MolSpinPy.runtime.Project("test")
     test.attach_dict(dat)
     test._extract_settings()
     test.attach_ActionManager(manager)
+    test._dryRun()
     #test._dryRun()
-    #test.Deploy()
-    id = test.SubmitToHPC(hpc_username="u28375",hpc_host="glogin-p2.hpc.gwdg.de",
-    hpc_key_path="~/.ssh/id_ed25519", remote_binary_path="/projects/extern/nhr/nhr_ni/nip00058/dir.project/MolSpin/MolSpin",
-    remote_working_dir="/user/benjamin.tigg/u28375", calcs_per_node=20, partition="medium96s:test")
-    id= 13921951
-    test.WatchHPC(id)
-    test.DownloadFromHPC(id, remote_working_dir="/user/benjamin.tigg/u28375", local_npz_output_path="results/")
+    test.Deploy()
+    #id = test.SubmitToHPC(hpc_username="u28375",hpc_host="glogin-p2.hpc.gwdg.de",
+    #hpc_key_path="~/.ssh/id_ed25519", remote_binary_path="/projects/extern/nhr/nhr_ni/nip00058/dir.project/MolSpin/MolSpin",
+    #remote_working_dir="/user/benjamin.tigg/u28375", calcs_per_node=20, partition="medium96s:test")
+    #id= 13921951
+    #test.WatchHPC(id)
+    #test.DownloadFromHPC(id, remote_working_dir="/user/benjamin.tigg/u28375", local_npz_output_path="results/")
     #Action7.Test()
     #Action.a = 1
     #Action.state.a = 1
@@ -71,10 +76,28 @@ def main():
     #    s6 = Action6.step(i)
     #    s7  = Action7.step(i)
     #    #print(f"{s1},{s2},{s3}")
-    print("end of testing")
+    #print("end of testing")
 
-    
+#main()
 
-    
+def StrainT1times():
+    #potentially create a wrapper object for the dictionary that encompesses the case map but behaves like a normal dictionary otherwise, so that the user can use the case map to access values in the dictionary without worrying about the case sensitivity of the keys. This would be a more elegant solution than having to pass around the case map separately and manually use it to access values in the dictionary.
+    dat = MolSpinPy.msd.MsdHandling.ConvertMSDtoDictionary("NV_centre_N14_GS_T-0.msd")
+    StrainModAction = MolSpinPy.objects.Action(dat, MolSpinPy.objects.Actions.LogSpaceVector(start = 5e-6, stop = 5e-2, num = 100, Exponent = False, Normalize = False,direction = MolSpinPy.maths.vector.Vector("1.0 1.0 1.0")), duration = 100, loop = True, key = 'spinsystems.GS.interactions.strain_modulated.e')
+    StrainFixedAction = MolSpinPy.objects.Action(dat, MolSpinPy.objects.Actions.LogSpaceVector(start = 1e-5, stop = 1e-1, num = 100, Exponent = False, Normalize = False, direction = MolSpinPy.maths.vector.Vector("1.0 1.0 1.0")), duration = 100, loop = True, key = 'spinsystems.GS.interactions.strain.e')
+    manager = MolSpinPy.runtime.ActionManager()
+    manager.add_action(StrainModAction)
+    manager.add_action(StrainFixedAction)
+    project = MolSpinPy.runtime.Project("StrainT1times-3")
+    project.attach_dict(dat)
+    project._extract_settings(), 
+    project.attach_ActionManager(manager)
+    id = project.SubmitToHPC(hpc_username="u28375",hpc_host="glogin-p2.hpc.gwdg.de",
+    hpc_key_path="~/.ssh/id_ed25519", remote_binary_path="/projects/extern/nhr/nhr_ni/nip00058/dir.project/MolSpinBenji/MolSpin",
+    remote_working_dir="/user/benjamin.tigg/u28375", partition="standard96", walltime="48:00:00", max_nodes=5, max_concurrent=10, est_sim_time=20, safety_buffer=1.4)
+    #id= 13921951
+    #project.WatchHPC(id)
+    #project.DownloadFromHPC(id, remote_working_dir="/user/benjamin.tigg/u28375", local_npz_output_path="results/")
+    #project.Deploy(NPZ = True, max_processes = 20)
 
-main()
+StrainT1times()

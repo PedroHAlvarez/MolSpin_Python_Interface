@@ -1,7 +1,9 @@
 #defines the project class which is the main overarching object that the users need
 
+from asyncio import threads
+
 from . import ActionManager
-from ..msd import FileTemplate , MsdHandling, MSDWriter
+from ..msd import FileTemplate , MsdHandling, MSDWriter, ProcessSingleFile
 from .RemoteDeploy import RemoteHpcOrchestrator
 import enum
 import copy
@@ -52,6 +54,8 @@ class Project():
             elif len(template_keys) == 1:
                 target_template = list(current_template.values())[0]
             else:
+                if(key == "__case_map"):
+                    continue
                 print(f"Key '{key}' is not permitted at {path}")
                 errors += 1
                 continue
@@ -171,7 +175,7 @@ class Project():
         
         return any("molspin" in part.lower() for part in path_parts)
     
-    def _find_molspin_binary(self, custom_path = None):
+    def _find_molspin_binary(self, custom_path = "../MolSpin"):
         binary_name = "molspin"
 
         if custom_path:
@@ -257,11 +261,17 @@ class Project():
             return False
 
     @staticmethod   
-    def _execute_single_file_local(executable_path, file_path, log_dir):
+    def _execute_single_file_local(executable_path, file_path, log_dir, NPZ = False, npz_dir = None, silent = True):
         base_name = os.path.basename(file_path)
         log_file_path = os.path.join(log_dir, f"{base_name}.log")
-        command = [executable_path, file_path]
+        command = [executable_path,"-p","2", file_path]
+        components = file_path.split(os.sep)
+        #print(components)
         #file_directory = os.path.dirname(os.path.abspath(file_path))
+
+        #custom_env = os.environ.copy()
+        #custom_env["OMP_NUM_THREADS"] = 2
+        #custom_env["OPENBLAS_NUM_THREADS"] = 2
 
         try:
             with open(log_file_path, 'w') as log_f:
@@ -271,16 +281,40 @@ class Project():
                     stderr=subprocess.PIPE, 
                     text=True, 
                     check=True,
+                    #env=custom_env
                     #cwd=file_directory
                 )
-            return None 
+            #return None 
         except subprocess.CalledProcessError as e:
             return f"CRASH: {base_name} failed. Exit Code {e.returncode}. Stderr: {e.stderr.strip()}"
         except Exception as e:
             return f"SYSTEM ERROR: Failed to spawn process for {base_name}. Details: {e}"
 
+        if(NPZ):
+            result_paths = []
+            folder = os.path.join(*components[:-1], "molspin_results")
+            #print(folder)
+            split_msd = components[-1].split(".")[0].split("_")
+            index = split_msd[-1]
+            #print([split_msd, index])
+            for f in os.listdir(folder):
+                #f will look like components[-1] but with some extra text in the last bit
+                #e.g. components[-1] = "StrainT1times_2.msd" but f will be "StrainT1times-TE_2.dat"
+                if not ".dat" in f:
+                    continue
+                index_string = "-{index}.".format(index=index)
+                #if index_string in f:
+                    #print(f)
+                if split_msd[0] in f and index_string in f:
+                    result_paths.append(os.path.join(folder, f))
+            #print(result_paths)
+            for results_path in result_paths:
+                ProcessSingleFile(results_path, npz_dir, silent=silent)
+        return None
 
-    def RunMolSpinDeploymentLocal(self, output_dir, parallel = True, max_workers = 10):
+
+
+    def RunMolSpinDeploymentLocal(self, output_dir, parallel = True, max_workers = 20, NPZ = False):
         print(f"\n-----Starting MolSpin Execution-----")
         if not self._executable_path or not os.path.exists(self._executable_path):
             raise FileNotFoundError(
@@ -290,8 +324,10 @@ class Project():
         
         log_dir = os.path.join(output_dir, "molspin_logs")
         result_dir = os.path.join(output_dir, "molspin_results")
+        npz_dir = os.path.join(output_dir, "molspin_npz")
         os.makedirs(log_dir, exist_ok=True)
         os.makedirs(result_dir, exist_ok=True)
+        os.makedirs(npz_dir, exist_ok=True)
         msd_files = [
             os.path.join(output_dir, f) for f in os.listdir(output_dir) 
             if f.endswith(".msd") and "_INITIAL" not in f
@@ -345,7 +381,7 @@ class Project():
         if parallel:
             with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
                 future_to_file = {
-                    executor.submit(self._execute_single_file_local, self._executable_path, path, log_dir): path 
+                    executor.submit(self._execute_single_file_local, self._executable_path, path, log_dir, NPZ, npz_dir, silent=True): path 
                     for path in msd_files
                 }
                 
@@ -391,7 +427,9 @@ class Project():
         steps = int(self._settings['steps'])
         for i in range(steps):
             self.manager.run(i)
-    def Deploy(self):
+    def Deploy(self, **kwargs):
+        npz = kwargs.get('NPZ', False)
+        max_processes = kwargs.get('max_processes', 10)
         if not self._executable_path:
             self._executable_path = self._find_molspin_binary()
             if not self._executable_path:
@@ -473,16 +511,16 @@ class Project():
         execution_clear = self.RunMolSpinDeploymentLocal(
             output_dir=output_dir,
             parallel=True,
-            max_workers=10
+            max_workers=max_processes,
+            NPZ = True
         )
         if not execution_clear:
             raise RuntimeError("Deployment pipeline halted: Anomalies caught during MolSpin processing execution.")
         
     def SubmitToHPC(self, hpc_username, hpc_host, hpc_key_path, remote_binary_path, remote_working_dir, **kwargs):
         if self._hpc == None:
-            self._hpc = RemoteHpcOrchestrator(hpc_username, hpc_host, hpc_key_path, kwargs.get('proxy_host'))
+            self._hpc = RemoteHpcOrchestrator(hpc_username, hpc_host, hpc_key_path, kwargs.pop('proxy_host', None))
             self._hpc.remote_working_dir = remote_working_dir
-        return
 
         if self._resolved_dict == {}:
             self._resolved_dict = self._base_dict
@@ -494,10 +532,12 @@ class Project():
             manager=self._manager,
             remote_binary_path=remote_binary_path,
             remote_working_dir=remote_working_dir,
-            partition=kwargs.get('partition', 'medium'),
-            walltime=kwargs.get('walltime', '00:30:00'),
-            calcs_per_node=kwargs.get('calcs_per_node', 16),
-            template=self._template
+            partition=kwargs.pop('partition', 'standard96'),
+            walltime=kwargs.pop('walltime', '01:00:00'),
+            calcs_per_node=kwargs.pop('max_concurrent', 20),
+            max_nodes=kwargs.pop('max_nodes', 10),
+            template=self._template,
+            **kwargs
         )
         return job_id
     

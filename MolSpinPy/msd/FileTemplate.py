@@ -12,9 +12,17 @@ class FileTemplate:
         with open(self.template_path, "r") as f:
             return f.read()
     def render(self, context):
-        raw = "".join([node.render(context) for node in self.node_tree])
+        case_map_exists = "__case_map" in context
+        if not case_map_exists:
+            context["__case_map"] = getattr(self, 'case_map', {})
+        try:
+            raw = "".join([node.render(context) for node in self.node_tree])
+            return re.sub(r'^\s*$\n', '', raw, flags=re.MULTILINE)
+        finally:
+            if not case_map_exists:
+                context.pop("__case_map", None)
+            
         #return raw
-        return re.sub(r'^\s*$\n', '', raw, flags=re.MULTILINE)
     def render_to_file(self, context, output_path):
         rendered_content = self.render(context)
         with open(output_path, "w") as f:
