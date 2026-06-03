@@ -24,7 +24,7 @@ class LogSpaceScalar(ActionFunction.ActionFunction):
     def DoStep(self, var):
         val = self.LogSpaceScalerLogic(self._step, var, self._state, self.sequence)
         self._step += 1
-        print(val)
+        #print(val)
         return val
     
 from MolSpinPy.maths.vector import Vector
