@@ -14,8 +14,19 @@ class SpinObject:
     def __init__(self,name):
         self.name = name
         self.type = SpinObjectType.NOT_SET
+        self.physical = True #useful for something like a Schulten-Wolynes interaction 
         #self.s_value = 0.0
         #self.g_tensor = tensor.Isotropic("0")
+
+    def set_physical(self, is_physical): 
+        self.physical = is_physical 
+
+    def render_to_string(self):
+        """Should be implemented by derived classes"""
+        raise NotImplementedError("Subclasses must implement render_to_string method")
+    def ConvertToDictionary(self):
+        """Should be implemented by derived classes"""
+        raise NotImplementedError("Subclasses must implement ConvertToDictionary method")
 
 class Electron(SpinObject):
     def __init__(self, name):
@@ -52,6 +63,8 @@ class Electron(SpinObject):
     def render_to_string(self):
         return f"spin(electron, {self._s_value}, {self._g_tensor.render_to_string()})"
     def ConvertToDictionary(self):
+        if not self.physical:
+            return self.name, None
         dict = {}
         dict['spin'] = self._s_value
         dict['tensor'] = self._g_tensor.render_to_string()
@@ -96,6 +109,8 @@ class Nucleus(SpinObject):
     def render_to_string(self):
         return f"spin(nucleus, {self._s_value}, {self._g_tensor.render_to_string()})"
     def ConvertToDictionary(self):
+        if not self.physical:
+            return self.name, None
         dict = {}
         dict['spin'] = self._s_value
         dict['tensor'] = self._g_tensor.render_to_string()
