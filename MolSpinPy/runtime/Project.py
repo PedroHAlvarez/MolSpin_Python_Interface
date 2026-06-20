@@ -310,6 +310,9 @@ class Project():
             #print(result_paths)
             for results_path in result_paths:
                 ProcessSingleFile(results_path, npz_dir, silent=silent)
+                #delete the msd file
+                os.remove(results_path)
+            os.remove(file_path)
         return None
 
 
@@ -426,7 +429,8 @@ class Project():
     def _dryRun(self):
         steps = int(self._settings['steps'])
         for i in range(steps):
-            self.manager.run(i)
+            self.manager.run(i,True)
+
     def Deploy(self, **kwargs):
         npz = kwargs.get('NPZ', False)
         max_processes = kwargs.get('max_processes', 10)

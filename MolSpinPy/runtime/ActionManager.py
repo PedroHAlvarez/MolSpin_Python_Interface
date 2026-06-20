@@ -29,7 +29,7 @@ class ActionManager:
         except Exception as e:
             print(f"Action testing failed: {str(e)}")
             raise e 
-    def run(self,current_step):
+    def run(self,current_step,dry=False):
         if not self._is_sorted:
             self._actions.sort(key=lambda x: x.priority, reverse=True)
         if not self._is_tested:
@@ -40,6 +40,8 @@ class ActionManager:
                 'step' : current_step,
                 'v' : action.value
             })
+            if(dry):
+                print(rf"{action.name}: {current_step}: {action.value}")
         if current_step % self._buffer == 0 and current_step > 0:
             self.flush()
     def _verify_relationships(self):

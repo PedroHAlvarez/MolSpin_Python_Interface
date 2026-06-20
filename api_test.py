@@ -90,14 +90,43 @@ def StrainT1times():
     manager.add_action(StrainFixedAction)
     project = MolSpinPy.runtime.Project("StrainT1times-3")
     project.attach_dict(dat)
-    project._extract_settings(), 
+    project._extract_settings()
     project.attach_ActionManager(manager)
-    id = project.SubmitToHPC(hpc_username="u28375",hpc_host="glogin-p2.hpc.gwdg.de",
-    hpc_key_path="~/.ssh/id_ed25519", remote_binary_path="/projects/extern/nhr/nhr_ni/nip00058/dir.project/MolSpinBenji/MolSpin",
-    remote_working_dir="/user/benjamin.tigg/u28375", partition="standard96", walltime="48:00:00", max_nodes=5, max_concurrent=10, est_sim_time=20, safety_buffer=1.4)
+    #id = project.SubmitToHPC(hpc_username="u28375",hpc_host="glogin-p2.hpc.gwdg.de",
+    #hpc_key_path="~/.ssh/id_ed25519", remote_binary_path="/projects/extern/nhr/nhr_ni/nip00058/dir.project/MolSpinBenji/MolSpin",
+    #remote_working_dir="/user/benjamin.tigg/u28375", partition="standard96", walltime="48:00:00", max_nodes=5, max_concurrent=10, est_sim_time=20, safety_buffer=1.4)
     #id= 13921951
-    #project.WatchHPC(id)
+    project.WatchHPC(id)
     #project.DownloadFromHPC(id, remote_working_dir="/user/benjamin.tigg/u28375", local_npz_output_path="results/")
-    #project.Deploy(NPZ = True, max_processes = 20)
+    project.Deploy(NPZ = True, max_processes = 20)
 
-StrainT1times()
+def StrainPL():
+    dat = MolSpinPy.msd.MsdHandling.ConvertMSDtoDictionary("NV_centre_N14.msd")
+    StrainModAction1 = MolSpinPy.objects.Action(dat, MolSpinPy.objects.Actions.LogSpaceVector(start = 5e-6, stop = 5e-2, num = 100, Exponent = False, Normalize = False,direction = MolSpinPy.maths.vector.Vector("1.0 1.0 1.0")), duration = 100, loop = True, key = 'spinsystems.GS.interactions.strain_modulated.e')
+    StrainFixedAction1 = MolSpinPy.objects.Action(dat, MolSpinPy.objects.Actions.LogSpaceVector(start = 1e-5, stop = 1e-1, num = 100, Exponent = False, Normalize = False, direction = MolSpinPy.maths.vector.Vector("1.0 1.0 1.0")), duration = 100, loop = True, key = 'spinsystems.GS.interactions.strain.e')
+    StrainModAction2 = MolSpinPy.objects.Action(dat, MolSpinPy.objects.Actions.LogSpaceVector(start = 5e-6, stop = 5e-2, num = 100, Exponent = False, Normalize = False,direction = MolSpinPy.maths.vector.Vector("1.0 1.0 1.0")), duration = 100, loop = True, key = 'spinsystems.ES.interactions.strain_modulated.e')
+    StrainFixedAction2 = MolSpinPy.objects.Action(dat, MolSpinPy.objects.Actions.LogSpaceVector(start = 1e-5, stop = 1e-1, num = 100, Exponent = False, Normalize = False, direction = MolSpinPy.maths.vector.Vector("1.0 1.0 1.0")), duration = 100, loop = True, key = 'spinsystems.ES.interactions.strain.e')
+    BFieldScan1 = MolSpinPy.objects.Action(dat, MolSpinPy.objects.Actions.LineSpaceVector(start = 0.0, stop = 0.15, num = 150, Normalize=True, direction=MolSpinPy.maths.vector.Vector("0.0 0.0 1.0")),duration=150, key='spinsystems.GS.interactions.zeeman.field',interval=100)
+    BFieldScan2 = MolSpinPy.objects.Action(dat, MolSpinPy.objects.Actions.LineSpaceVector(start = 0.0, stop = 0.15, num = 150, Normalize=True, direction=MolSpinPy.maths.vector.Vector("0.0 0.0 1.0")),duration=150, key='spinsystems.ES.interactions.zeeman.field',interval=100)
+    BFieldScan3 = MolSpinPy.objects.Action(dat, MolSpinPy.objects.Actions.LineSpaceVector(start = 0.0, stop = 0.15, num = 150, Normalize=True, direction=MolSpinPy.maths.vector.Vector("0.0 0.0 1.0")),duration=150, key='spinsystems.GS.interactions.nuclearzeeman.field',interval=100)
+    BFieldScan4 = MolSpinPy.objects.Action(dat, MolSpinPy.objects.Actions.LineSpaceVector(start = 0.0, stop = 0.15, num = 150, Normalize=True, direction=MolSpinPy.maths.vector.Vector("0.0 0.0 1.0")),duration=150, key='spinsystems.ES.interactions.nuclearzeeman.field',interval=100)
+    manager = MolSpinPy.runtime.ActionManager()
+    manager.add_action(StrainModAction1)
+    manager.add_action(StrainFixedAction1)
+    manager.add_action(StrainModAction2)
+    manager.add_action(StrainFixedAction2)
+    manager.add_action(BFieldScan1)
+    manager.add_action(BFieldScan2)
+    manager.add_action(BFieldScan3)
+    manager.add_action(BFieldScan4)
+    project = MolSpinPy.runtime.Project("PL-Strain")
+    project.attach_dict(dat)
+    project._extract_settings()
+    project.attach_ActionManager(manager)
+    
+    #project._dryRun()
+    project.Deploy(NPZ=True, max_processes=20)
+
+
+#StrainT1times()
+StrainPL()

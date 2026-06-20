@@ -1,7 +1,7 @@
 import enum
 from MolSpinPy.maths.tensor import Tensor as tensor
 from MolSpinPy.maths.vector import Vector as vector
-from . import SpinObject
+from MolSpinPy.objects.spin_object import SpinObject
 from . import ActionVariable
 #from . import TimeDependance 
 

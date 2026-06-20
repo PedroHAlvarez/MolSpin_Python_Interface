@@ -71,12 +71,13 @@ class RemoteHpcOrchestrator:
 
     def _generate_slurm_script(self, remote_results_dir, remote_logs_dir, remote_binary_path, 
                            partition, walltime, total_tasks, project_name, max_concurrent, 
-                           calcs_per_node, total_array_nodes):
+                           calcs_per_node, total_array_nodes,max_nodes):
         print(f"--- Generating Slurm Script Blueprint ---")
-        print(f" - Batch Project Suffix: {project_name}")
+        print(f" - Project: {project_name}")
         print(f" - Active Walltime Limit: {walltime}")
         print(f" - Array Width (Nodes Requested): 1-{total_array_nodes}")
         print(f" - Max Concurrent Processes per Node: {max_concurrent}")
+        print(f" - Max Concurrent Nodes: {max_nodes}")
         print(f" - Total Calculations Assigned to each Node: {calcs_per_node}\n")
 
         cal_per_node = calcs_per_node
@@ -88,7 +89,7 @@ class RemoteHpcOrchestrator:
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task={max_concurrent}
 #SBATCH --time={walltime}
-#SBATCH --array=1-{total_array_nodes}
+#SBATCH --array=1-{total_array_nodes}%{max}
 #SBATCH --output={remote_logs_dir}/array_%A_%a.out
 #SBATCH --error={remote_logs_dir}/array_%A_%a.err
 
@@ -198,54 +199,51 @@ fi
 
         total_tasks = len(msd_filenames)
         
-        batches = self.calculate_hpc_schedule(total_tasks=total_tasks, max_nodes=max_nodes, max_concurrent=calcs_per_node, 
-                                                     est_single_job_hours=kwargs.get('est_sim_time', 20),
-                                                     max_walltime_hours=kwargs.get('max_walltime_hours', 48),
-                                                        safety_buffer=kwargs.get('safety_buffer', 1.2))
-        submitted_job_ids = []
-        last_job_id = None
-        for i, batch in enumerate(batches):
-            batch_index = i + 1
-            print(f"\n--- Provisioning Batch {batch_index}/{len(batches)} ---")
+        #batches = self.calculate_hpc_schedule(total_tasks=total_tasks, max_nodes=max_nodes, max_concurrent=calcs_per_node, 
+        #                                             est_single_job_hours=kwargs.get('est_sim_time', 20),
+        #                                             max_walltime_hours=kwargs.get('max_walltime_hours', 48),
+        #                                                safety_buffer=kwargs.get('safety_buffer', 1.2))
         
-            slurm_template = self._generate_slurm_script(
-                remote_results_dir=remote_results_dir,
-                remote_logs_dir=remote_logs_dir,
-                remote_binary_path=remote_binary_path,
-                partition=partition,
-                walltime=batch['walltime'],             
-                total_tasks=total_tasks,
-                project_name=f"{project_name}_b{batch_index}",
-                max_concurrent=calcs_per_node,          
-                calcs_per_node=batch['calcs_per_node'], 
-                total_array_nodes=batch['nodes']
-)
+        total_tasks = len(msd_filenames)
+        total_array_nodes = math.ceil(total_tasks / calcs_per_node)
+        est_single_job_hours=kwargs.get('est_sim_time', 20)
+        safety_buffer=kwargs.get('safety_buffer', 1.2)
+        allocated_hours = math.ceil(est_single_job_hours * safety_buffer)
+        walltime_str = f"{allocated_hours:02d}:00:00"
 
-            script_filename = f"submit_batch_{batch_index}.sh"
-            remote_script_path = f"{remote_working_dir}/{script_filename}"
-            with sftp.file(remote_script_path, 'w') as f:
+        slurm_template = self._generate_slurm_script(
+            remote_results_dir=remote_results_dir,
+            remote_logs_dir=remote_logs_dir,
+            remote_binary_path=remote_binary_path,
+            partition=partition,
+            walltime=walltime_str,
+            total_tasks=total_tasks,
+            project_name=project_name,
+            max_concurrent=calcs_per_node,
+            total_array_nodes=total_array_nodes,
+            max_nodes=max_nodes
+        )
+        submitted_job_ids = []
+        script_filename = "submit_pipeline.sh"
+        remote_script_path = f"{remote_working_dir}/{script_filename}"
+        with sftp.file(remote_script_path, 'w') as f:
                 f.write(slurm_template)
-            #sftp.chmod(remote_script_path, 0o755)
+        submit_cmd = f"sbatch {remote_script_path}"
+        _, stdout, stderr = hpc_ssh.exec_command(submit_cmd)
+        output_str = stdout.read().decode('utf-8')
+        error_str = stderr.read().decode('utf-8')
 
-            submit_cmd = "sbatch "
-            if last_job_id:
-                submit_cmd += f"--dependency=afterok:{last_job_id}_%a "
-            submit_cmd += remote_script_path
-
-            _, stdout, stderr = hpc_ssh.exec_command(submit_cmd)
-            output_str = stdout.read().decode('utf-8')
-            error_str = stderr.read().decode('utf-8')
-            match = re.search(r"Submitted batch job (\d+)", output_str)
-            if match:
-                current_job_id = match.group(1)
-                submitted_job_ids.append(current_job_id)
-                last_job_id = current_job_id
-                print(f"Successfully queued Batch {batch_index} | Slurm ID: {current_job_id}")
-            else:
-                print(f"Error executing batch script {script_filename} on HPC.")
-                print(f"HPC Diagnostics: {error_str}")
-                return None
-
+        match = re.search(r"Submitted batch job (\d+)", output_str)
+        if match:
+            current_job_id = match.group(1)
+            submitted_job_ids.append(current_job_id)
+            last_job_id = current_job_id
+            print(f"Successfully queued job | Slurm ID: {current_job_id}")
+        else:
+            print(f"Error executing batch script {script_filename} on HPC.")
+            print(f"HPC Diagnostics: {error_str}")
+            return None
+        
         sftp.close()
         hpc_ssh.close()
 
@@ -285,10 +283,10 @@ fi
         
         #print(f"Job {job_id} is complete! Starting download")
         #remote_tar_path = f"{remote_working_dir.rstrip('/')}/workspace_{job_id}.tar"
-        remote_tar_path = f"{remote_working_dir.rstrip('/')}/workspace_$SLURM_ARRAY_JOB_ID.tar"
+        #remote_tar_path = f"{remote_working_dir.rstrip('/')}/workspace_$SLURM_ARRAY_JOB_ID.tar"
         remote_results_dir = f"{remote_working_dir.rstrip('/')}/molspin_run_workspace"
         parent_dir = os.path.dirname(remote_results_dir)
-        local_temp_tar = rf"./{project_name}.tar.gz"
+        #local_temp_tar = rf"./{project_name}.tar.gz"
         transport = hpc_ssh.get_transport()
         if transport is not None:
             transport.set_keepalive(10)
@@ -303,22 +301,23 @@ fi
             hpc_ssh.close()
             return False
         
-        try:
-            all_files = sftp.listdir(parent_dir)
-            tar_files = [f for f in all_files if f.startswith("workspace_") and f.endswith(".tar")]
-        except IOError:
-            print("Error: Unable to scan remote workspace directory files.")
-            sftp.close()
-            hpc_ssh.close()
-            return False
+        target_tar_files = [f"workspace_{jid}.tar" for jid in job_ids]
+        verified_tar_files = []
+        for tar_file in target_tar_files:
+            remote_tar_path = f"{parent_dir.rstrip('/')}/{tar_file}"
+            try:
+                sftp.stat(remote_tar_path)
+                verified_tar_files.append(tar_file)
+            except IOError:
+                print(f"Warning: Expected result archive '{tar_file}' was not found on the host filesystem.")
         
-        if not tar_files:
+        if not verified_tar_files:
             print("No output .tar result files")
             sftp.close()
             hpc_ssh.close()
             return False
         
-        print(f"Found {len(tar_files)} .tar files")
+        print(f"Found {len(verified_tar_files)} .tar files")
         #print("Archiving and compressing remote .dat files on HPC")
         #tar_cmd = f"tar -czf {remote_tar_path} -C {os.path.dirname(remote_results_dir)} molspin_run_workspace"
         #stdin, stdout, stderr = hpc_ssh.exec_command(tar_cmd)
@@ -350,7 +349,7 @@ fi
             sys.stdout.write(msg)
             sys.stdout.flush()
 
-        for tar_file in tar_files:
+        for tar_file in verified_tar_files:
             try:
                 print(f"\nPulling down: {tar_file}")
                 specific_remote_tar = f"{parent_dir.rstrip('/')}/{tar_file}"
@@ -364,8 +363,9 @@ fi
                 return False
     
         print("Cleaning up remote HPC workspace and tarball archive files")
-        cleanup_cmd = f"rm -rf {remote_results_dir} {parent_dir.rstrip('/')}/workspace_*.tar"
-        stdin, stdout, stderr = hpc_ssh.exec_command(cleanup_cmd)
+        paths_to_clean = " ".join([f"{parent_dir.rstrip('/')}/{tf}" for tf in verified_tar_files])
+        cleanup_cmd = f"rm -rf {remote_results_dir} {paths_to_clean}"
+        _, stdout, _ = hpc_ssh.exec_command(cleanup_cmd)
         stdout.channel.recv_exit_status()
         print("Remote workspace scrub complete")
 
