@@ -5,6 +5,7 @@ import sys
 import math
 import random
 import json
+import gzip
 
 def ConvertMSDtoDictionary(filename):
     if not os.path.isfile(filename):
@@ -132,6 +133,10 @@ def ParseTokenizedStringsToJSONL(_fileHandle, master_template, param_sweep):
 def writeLocal(master_template, param_sweep_rows, local_filepath):
     with open(local_filepath, "w", encoding="utf-8") as f:
         ParseTokenizedStringsToJSONL(f, master_template, param_sweep_rows)
+
+def writeLocalCompressed(master_template, param_sweep_rows, local_filepath):
+    with gzip.open(local_filepath, "wt", encoding="utf-8") as f:
+        ParseTokenizedStringsToJSONL(f,master_template,param_sweep_rows)
 
 def writeSFTP(master_template, param_sweep_rows, remote_filepath, sftp_client):
     with sftp_client.open(remote_filepath, "w") as remote_file:

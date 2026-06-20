@@ -2,6 +2,7 @@ import sys
 import os
 import json
 import subprocess
+import gzip
 
 def reconstruct(manifest_path, task_idx, output_dir):
     if not os.path.exists(manifest_path):
@@ -11,7 +12,7 @@ def reconstruct(manifest_path, task_idx, output_dir):
     master_template = None
     target_params = None
 
-    with open(manifest_path, "r", encoding="utf-8") as f:
+    with gzip.open(manifest_path, "rt", encoding="utf-8") as f:
         first_line = f.readline()
         if not first_line:
             print("Error: Empty manifest file.", file=sys.stderr)
