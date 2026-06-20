@@ -532,7 +532,7 @@ class Project():
         job_id = self._hpc.execute_remote_deployment(
             project_name=self.name,
             steps=int(self._settings.get('steps', 1)),
-            resolved_dict=copy.deepcopy(self._resolved_dict),
+            resolved_dict=self._resolved_dict,
             manager=self._manager,
             remote_binary_path=remote_binary_path,
             remote_working_dir=remote_working_dir,

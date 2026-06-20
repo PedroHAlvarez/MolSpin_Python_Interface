@@ -176,7 +176,7 @@ fi
 
         start_id = 0
         msd_filenames = []
-        
+        compressor = MsdHandling.SequentialSweepCompressor()
         for i in range(steps):
             manager.run(i)
 
@@ -190,9 +190,15 @@ fi
             snapshot = copy.deepcopy(resolved_dict)
             filename = f"{project_name}_{start_id + i}.msd"
             msd_filenames.append(filename)
+            rendered_str = template.render(snapshot)
+            compressor.process_rendered_string(rendered_str)
 
-            remote_file_path = f"{remote_results_dir}/{filename}"
-            template.render_to_file_ssh(snapshot,remote_file_path,sftp)
+            #remote_file_path = f"{remote_results_dir}/{filename}"
+            #template.render_to_file_ssh(snapshot,remote_file_path,sftp)
+
+        template, sweep_data = compressor.build_payloads()
+        MsdHandling.writeLocal(template, sweep_data, f"{project_name}_hpc.jsonl")
+
         msd_filenames.sort()
         with sftp.file(f"{remote_results_dir}/hpc_job_map.txt", 'w') as f:
             f.write("\n".join(msd_filenames) + "\n")
