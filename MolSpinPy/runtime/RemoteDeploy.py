@@ -198,6 +198,9 @@ fi
 
         template, sweep_data = compressor.build_payloads()
         MsdHandling.writeLocal(template, sweep_data, f"{project_name}_hpc.jsonl")
+        MsdHandling.writeLocalCompressed(template, sweep_data, f"{project_name}_hpc.jsonl.gz")
+        sftp.put(f"{project_name}_hpc.jsonl.gz",f"{remote_results_dir}/{project_name}_hpc.jsonl.gz")
+        os.remove(f"{project_name}_hpc.jsonl.gz")
 
         msd_filenames.sort()
         with sftp.file(f"{remote_results_dir}/hpc_job_map.txt", 'w') as f:
