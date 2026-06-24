@@ -93,11 +93,15 @@ def StrainT1times():
     project._extract_settings()
     project.attach_ActionManager(manager)
     id = project.SubmitToHPC(hpc_username="u28375",hpc_host="glogin-p2.hpc.gwdg.de",
-    hpc_key_path="~/.ssh/id_ed25519", remote_binary_path="/projects/extern/nhr/nhr_ni/nip00058/dir.project/MolSpinBenji/MolSpin",
-    remote_working_dir="/user/benjamin.tigg/u28375", partition="standard96", walltime="48:00:00", max_nodes=5, max_concurrent=10, est_sim_time=20, safety_buffer=1.4)
+    hpc_key_path="~/.ssh/id_ed25519", remote_binary_path="/projects/extern/nhr/nhr_ni/nip00058/dir.project/MolSpinBenji",
+    remote_working_dir="/user/benjamin.tigg/u28375", partition="standard96s:test", walltime="1:00:00", max_nodes=5, max_concurrent=10, est_sim_time=0.5, safety_buffer=1.4)
     #id= 13921951
-    #project.WatchHPC(id)
-    #project.DownloadFromHPC(id, remote_working_dir="/user/benjamin.tigg/u28375", local_npz_output_path="results/")
+    #id = ['14453268','14453267']
+    project.WatchHPC(id)
+    #project.LoadHPC(hpc_username="u28375",hpc_host="glogin-p2.hpc.gwdg.de",
+    #    hpc_key_path="~/.ssh/id_ed25519", remote_binary_path="/projects/extern/nhr/nhr_ni/nip00058/dir.project/MolSpinBenji",
+    #    remote_working_dir="/user/benjamin.tigg/u28375")
+    project.DownloadFromHPC(id, remote_working_dir="/user/benjamin.tigg/u28375", local_npz_output_path="results/")
     #project.Deploy(NPZ = True, max_processes = 20)
 
 def StrainPL():

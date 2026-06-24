@@ -8,3 +8,5 @@ _pycache_\*
 *.tar.gz
 *.npz
 *.out
+*.jsonl
+*.tar

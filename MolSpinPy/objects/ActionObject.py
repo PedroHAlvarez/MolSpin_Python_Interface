@@ -9,7 +9,7 @@ class TimeManager():
         self.action = Action
         self.elapsed_ticks = 0
         self.completed_loops = 0
-        self.death_offset = 0
+        self.death_offset = None
     def GetLocalTime(self, global_step):
         act = self.action
         clock_source= None
@@ -59,6 +59,9 @@ class Action():
         super().__setattr__('_FUNCTION_ARGS', list(getattr(func, '_param_names', {})))
         super().__setattr__('children', [])
         super().__setattr__('time_manager', TimeManager(self))
+        super().__setattr__('kill_parent', False)
+        super().__setattr__('kill_self', False)
+        super().__setattr__('kill_commands',{})
 
         defaults = {
             'duration' : None,
@@ -66,7 +69,7 @@ class Action():
             'loop' : False,
             'interval' : 1,
             'active' : True,
-            'parent' : None
+            'parent' : None,
         }
 
         super().__setattr__('_priority', 0)
@@ -86,7 +89,7 @@ class Action():
     
     @property
     def priority(self):
-        return self._priority
+        return int(self._priority)
     
     @priority.setter
     def priority(self,z):
@@ -95,12 +98,14 @@ class Action():
     @property
     def effective_priority(self):
         if self.parent is None:
-            return self.priority
-        return self.parent.effective_priority
+            return int(self.priority)
+        return self.parent.effective_priority + (self.priority,)
     
     def add_child(self, child):
         if child not in self.children:
             self.children.append(child)
+            if child.kill_parent == True:
+                self.kill_commands[child] = False
     def bind_to(self,target, **kwargs):
         new_key = kwargs.get('key', self.key)
         if isinstance(target,dict) and new_key != None:
@@ -163,8 +168,17 @@ class Action():
         raise AttributeError(error_msg)
     def step(self,global_step, return_logic = False):
         if not self.active:
-            return None if not return_logic else False
-        
+            return None if not return_logic else False 
+        if self.kill_self:
+            total = len(self.kill_commands)
+            count = 0
+            for idx, key in enumerate(self.kill_commands):
+                if self.kill_commands[key]:
+                    count += 1
+            if count == total and total != 0:
+                self.active = False
+                return None if not return_logic else False
+
         local_step = self.time_manager.GetLocalTime(global_step)
         if local_step is None:
             return None if not return_logic else False
@@ -180,6 +194,8 @@ class Action():
             else:
                 self.time_manager.completed_loops += 1
                 self.active = False
+                if self.kill_parent:
+                    self.parent.kill_commands[self] = True
                 return None if not return_logic else False
         if return_logic:
             self.func._step += 1

@@ -520,6 +520,11 @@ class Project():
         )
         if not execution_clear:
             raise RuntimeError("Deployment pipeline halted: Anomalies caught during MolSpin processing execution.")
+
+    def LoadHPC(self, hpc_username, hpc_host, hpc_key_path, remote_working_dir, **kwargs):
+        if self._hpc == None:
+            self._hpc = RemoteHpcOrchestrator(hpc_username, hpc_host, hpc_key_path, kwargs.pop('proxy_host', None))
+            self._hpc.remote_working_dir = remote_working_dir
         
     def SubmitToHPC(self, hpc_username, hpc_host, hpc_key_path, remote_binary_path, remote_working_dir, **kwargs):
         if self._hpc == None:
@@ -548,7 +553,7 @@ class Project():
     def WatchHPC(self, job_id):
         if self._hpc == None:
             return RuntimeError("No HPC project found")
-        self._hpc.watch_hpc_job(job_id=job_id, total_tasks=self._settings['steps'],poll_interval=5)
+        self._hpc.watch_hpc_job(job_id=job_id, total_tasks=self._settings.get('steps',1),poll_interval=5)
     
     def DownloadFromHPC(self, job_id, remote_working_dir, local_npz_output_path):
         #orchestrator = RemoteHpcOrchestrator(hpc_username, hpc_host, hpc_key_path, proxy_host)
@@ -558,5 +563,5 @@ class Project():
             project_name=self.name,
             remote_working_dir=remote_working_dir,
             local_npz_path=local_npz_output_path,
-            job_id=job_id
+            job_ids=job_id
         )

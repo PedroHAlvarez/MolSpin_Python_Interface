@@ -10,6 +10,7 @@ class ActionManager:
         self._buffer = history_size
     def add_action(self, action_instance : Action, priority = 0):
         if action_instance.parent is not None:
+            action_instance.priority = priority
             action_instance.priority = action_instance.effective_priority
         else:
             action_instance.priority = priority
@@ -31,7 +32,7 @@ class ActionManager:
             raise e 
     def run(self,current_step,dry=False):
         if not self._is_sorted:
-            self._actions.sort(key=lambda x: x.priority, reverse=True)
+            self._actions.sort(key=lambda x: x.effective_priority, reverse=True)
         if not self._is_tested:
             self.test_all()
         for action in self._actions:
