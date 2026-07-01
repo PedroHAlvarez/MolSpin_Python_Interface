@@ -3,6 +3,8 @@ from . import spin_object
 #from . import ActionVariable
 #from . import ActionObject
 
+from .ActionVariable import DictionaryBoundVariable
+
 #actions 
 from .ActionFunction import ActionScript
 from .ActionObject import Action
