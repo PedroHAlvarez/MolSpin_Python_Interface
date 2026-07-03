@@ -71,6 +71,15 @@ def vector_input(vector_str):
         return False
     return bool(re.match(pattern, vector_str))
 
+def list_input(list_str):
+    if not isinstance(list_str, str):
+        raise ValueError(f"Invalid list input format: {list_str}")
+    num = r"[-+]?(?:\d+\.?\d*|\.\d+)(?:[eE][-+]?\d+)?"
+    seperator = r"(?:[\s,]+)"
+    body = rf"{num}(?:{seperator}{num})*"
+    pattern = rf"^\s*[\[\(]?\s*({body})\s*[\]\)]?\s*$"
+    return bool(re.match(pattern, list_str))
+
 def is_float(s : str):
     if not isinstance(s,str):
         return False
@@ -127,6 +136,9 @@ def GetType(str):
     valid, t, s = is_tensor(str)
     if valid:
         return "matrix", t, s 
+    valid = list_input(str)
+    if valid:
+        return "list", None, str
 
 def test_tensor_input():
     valid_inputs = [

@@ -149,7 +149,7 @@ class Project():
     
     @staticmethod
     def _find_all_paths(binary = "molspin"):
-        if os.name == "nt" and not binary.endswidth(".exe"):
+        if os.name == "nt" and not binary.endswith(".exe"):
             binary += ".exe"
 
         path_env = os.environ.get("PATH", "")

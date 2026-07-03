@@ -12,3 +12,5 @@ _pycache_\*
 *.tar
 DataManagment.py
 resonance_frequency_scan.py
+
+*.txt

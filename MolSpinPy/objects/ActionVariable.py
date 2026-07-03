@@ -22,12 +22,12 @@ class ActionVariable:
     #    return getattr(self._target, name)
     #def __repr__(self):
     #    return f"Wrapper"
-
 class DictionaryBoundVariable:
-    def __init__(self, registry, key):
+    def __init__(self, registry, key, **kwargs):
         self.registry = registry
         self.key = key
         self.name = key
+        self.sep = kwargs.get('sep', ' ')
     def _get_target(self):
         keys = self.key.split('.')
         current = self.registry
@@ -46,6 +46,8 @@ class DictionaryBoundVariable:
             val = maths.vector.Vector(val)
         elif t == 'matrix':
             val = maths.tensor.CreateTensor(c,v)
+        elif t == 'list':
+            val = maths.list.List(val, sep=self.sep)
         else:
             raise ValueError("Type not supported")
         return getattr(val, 'value', val)
@@ -59,6 +61,16 @@ class DictionaryBoundVariable:
             container[final_key] = str(val)
     def __repr__(self):
         return f"DictHandle({self.key}: {self.value})"
+    
+    @classmethod
+    def test_create(cls,registry, key, **kwargs):
+        try:
+            handle = cls(registry, key, **kwargs)
+            _ = handle.value
+            return True
+        except Exception as e:
+            print(f"Error creating DictionaryBoundVariable for key '{key}': {e}")
+            return False
     
 class BoundVariable:
     def __init__(self, instance, descriptor : ActionVariable):

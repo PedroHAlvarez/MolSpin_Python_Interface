@@ -82,12 +82,16 @@ def main():
 
 def StrainT1times():
     #potentially create a wrapper object for the dictionary that encompesses the case map but behaves like a normal dictionary otherwise, so that the user can use the case map to access values in the dictionary without worrying about the case sensitivity of the keys. This would be a more elegant solution than having to pass around the case map separately and manually use it to access values in the dictionary.
-    dat = MolSpinPy.msd.MsdHandling.ConvertMSDtoDictionary("NV_centre_N14_GS_T-0.msd")
+    #dat = MolSpinPy.msd.MsdHandling.ConvertMSDtoDictionary("NV_centre_N14_GS_T-0.msd")
+    dat = MolSpinPy.msd.MsdHandling.ConvertMSDtoDictionary("NV_centre_N14.msd")
 
     #@MolSpinPy.ActionScript
     #def IsotropicPhononBath(step, var, state, start, stop, num):
     #    return
 
+    
+    #creating a test action variable
+    test_list_var = MolSpinPy.objects.DictionaryBoundVariable.test_create(dat, 'spinsystems.GS.interactions.strain_modulated.e')
 
     StrainModAction = MolSpinPy.objects.Action(dat, MolSpinPy.objects.Actions.LogSpaceVector(start = 5e-6, stop = 5e-2, num = 100, Exponent = False, Normalize = False,direction = MolSpinPy.maths.vector.Vector("1.0 1.0 1.0")), duration = 100, loop = True, key = 'spinsystems.GS.interactions.strain_modulated.e')
     StrainFixedAction = MolSpinPy.objects.Action(dat, MolSpinPy.objects.Actions.LogSpaceVector(start = 1e-5, stop = 1e-1, num = 100, Exponent = False, Normalize = False, direction = MolSpinPy.maths.vector.Vector("1.0 1.0 1.0")), duration = 100, loop = True, key = 'spinsystems.GS.interactions.strain.e')
