@@ -451,7 +451,7 @@ class Project():
             except:
                 print("Warning: Could not automatically extract settings. Defaulting to 1 step.")
                 self._settings['steps'] = 1
-        steps = int(self._settings['steps'])
+        steps = (kwargs.get('steps', self._settings['steps']))
 
         io_queue = None
 
@@ -488,7 +488,7 @@ class Project():
 
                 self._resolved_dict['tasks'][key]['logfile'] = logfile
                 self._resolved_dict['tasks'][key]['datafile'] = resultfile
-            self._resolved_dict['settings']['general']['steps'] = 1
+            #self._resolved_dict['settings']['general']['steps'] = 1
 
             snapshot = copy.deepcopy(self._resolved_dict)
 
@@ -566,7 +566,7 @@ class Project():
             job_ids=job_id
         )
 
-    def UpdateBinary(self, remote_binary_path,armadillo_path,partition = "standard96"):
+    def UpdateBinary(self, remote_binary_path,armadillo_path,partition = "standard96",hpc_module_list = None):
         if self._hpc == None:
             return RuntimeError("No HPC connection found - use LoadHPC() first to establish a connection.")
         check_cmd = f"[ -d '{remote_binary_path}/.git' ] && echo 'VALID' || echo 'INVALID'"
@@ -611,13 +611,13 @@ class Project():
             print(f"Error during Git pull: {stderr_output}")
             return False
         print(f"Git pull successful. Output:\n{stdout_output}")
-        modules = f"-larmadillo -lopenblas -llapack -fopenmp -DARMA_NO_DEBUG"
-        armadillo_string = f"ARMADILLO = {modules}"
+        modules = f"-lopenblas -llapack -fopenmp -DARMA_NO_DEBUG"
+        armadillo_string = f"ARMADILLO = -larmadillo {modules}"
         old_path = f"path/to/armadillo/installdir"
         modify_makefile_cmd = (
             f"cd {remote_binary_path} && " 
             f"sed -i 's|^{armadillo_string}|# {armadillo_string}|g' makefile && "
-            f"sed -i 's|^# ARMADILLO = -I/{old_path}/include/ -DARMA_DONT_USE_WRAPPER -fopenmp|ARMADILLO = -I/{armadillo_path}/include/ {modules} -DARMA_DONT_USE_WRAPPER|g' makefile"
+            f"sed -i 's|^# ARMADILLO = -I/{old_path}/include/ -DARMA_DONT_USE_WRAPPER -fopenmp|ARMADILLO = -I{armadillo_path}/include/ {modules} -DARMA_DONT_USE_WRAPPER|g' makefile"
         )
 
         _, _, stderr = hpcssh.exec_command(modify_makefile_cmd)
@@ -627,9 +627,11 @@ class Project():
         clean_cmd = f"cd {remote_binary_path} && make clean"
         _, _, stderr = hpcssh.exec_command(clean_cmd)
         wait = stderr.channel.recv_exit_status()
+        module_load_string = " && ".join([f"module load {mod}" for mod in (hpc_module_list or [])])
         compile_cmd = (
             f"cd {remote_binary_path} && "
-            f"srun -p {partition} -N 1 -c 16 --time=01:00:00 sh -c  'make -j16'"
+            f"srun -p {partition} -N 1 -c 16 --time=00:30:00 --job-name='MolSpinCompile' "
+            f"sh -c 'module purge && {module_load_string} && make -j16'"
         )
 
         _, stdout, stderr = hpcssh.exec_command(compile_cmd)
