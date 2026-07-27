@@ -54,6 +54,9 @@ class ActionFunction:
             self._state = value
         else:
             raise TypeError("State must be a dictionary or a SimpleNamespace.")
+        
+    def __metadata__(self):
+        raise NotImplementedError("Sub classes should implement their own __metadata__ function")
     
 class CustomActionFunction(ActionFunction):
     def __init__(self, func = None):

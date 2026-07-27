@@ -111,6 +111,7 @@ def _init_input_data():
         input_data['spinsystems']['System']['properties'] = {}
         input_data['spinsystems']['System']['pulses'] = {}
         input_data['spinsystems']['System']['operators'] = {}
+        input_data['spinsystems']['System']['pulsesequences'] = {}
         input_data['settings'] = {}
         input_data['actions'] = {}
         input_data['outputs'] = {}

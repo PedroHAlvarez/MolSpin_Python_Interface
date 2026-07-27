@@ -6,7 +6,7 @@ class Lexer:
         self.text = text
         token_quotes = r"''[^']*''|\[^\"]*\""
         token_identifiers = r"[\w\d\.\(\)\|<>+-]+"
-        token_symbols = r"[={}();]"
+        token_symbols = r"[={}();,]"
         pattern = f"({token_quotes}|{token_identifiers}|{token_symbols})"
         self.token_pattern = re.compile(pattern)
         self.tokens = self.token_pattern.findall(self.text)
@@ -82,7 +82,9 @@ class RecursiveRenderer:
                     
                     val_list.append(self.lexer.consume())
                 self.lexer.consume(";")
-                obj[low_token] = " ".join(val_list)
+                raw_line = " ".join(val_list)
+                clean_line = re.sub(r'\s*,\s*', ', ', raw_line).strip()
+                obj[low_token] = clean_line
             else:
                 self._track_case(token)
                 name = self.lexer.consume()

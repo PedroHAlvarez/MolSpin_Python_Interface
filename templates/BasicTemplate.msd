@@ -1,5 +1,5 @@
 {% comment %}
-  @author 
+  @author Benji Tigg
   @brief  General template file for MolSpin input.
 
 # JSON Example for use of the template:

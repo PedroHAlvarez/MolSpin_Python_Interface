@@ -81,22 +81,28 @@ class RemoteHpcOrchestrator:
         print(f" - Total Calculations Assigned to each Node: {calcs_per_node}\n")
 
         cal_per_node = calcs_per_node
+        manifest_name = f"{project_name}_hpc.jsonl.gz"
+        worker_path = f"hpc_worker.py"
 
-        script = f"""#!/bin/bash
+        job_script = f"""#!/bin/bash
 #SBATCH --job-name=molspin_python_{project_name}
 #SBATCH --partition={partition}
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task={max_concurrent}
 #SBATCH --time={walltime}
-#SBATCH --array=1-{total_array_nodes}%{max}
+#SBATCH --array=1-{total_array_nodes}%{max_nodes}
 #SBATCH --output={remote_logs_dir}/array_%A_%a.out
 #SBATCH --error={remote_logs_dir}/array_%A_%a.err
+
 
 module purge
 module load gcc/11.5.0
 module load openblas
 module load netlib-lapack
+module load python
+
+source {remote_binary_path}/molspin_pyi/bin/activate
 
 cd {remote_results_dir}
 CALCS_PER_NODE={cal_per_node}
@@ -104,9 +110,11 @@ MAX_CONCURRENT={max_concurrent}
 START_LINE=$(((SLURM_ARRAY_TASK_ID - 1) * CALCS_PER_NODE + 1))
 END_LINE=$((SLURM_ARRAY_TASK_ID * CALCS_PER_NODE))
 
+MANIFEST_PATH={manifest_name}
+WORKER_PATH={worker_path}
+
 for (( line_idx=$START_LINE; line_idx<=$END_LINE; line_idx++ )); do
-    TARGET_MSD_FILE=$(sed -n "${{line_idx}}p" hpc_job_map.txt)
-    if [ -z "$TARGET_MSD_FILE" ]; then
+    if [ $line_idx -gt {total_tasks} ]; then
         echo "Reached end of job map"
         break
     fi
@@ -115,52 +123,41 @@ for (( line_idx=$START_LINE; line_idx<=$END_LINE; line_idx++ )); do
         sleep 1
     done
 
-    NODE_LOCAL_DIR="/tmp/molspin_${{SLURM_ARRAY_JOB_ID}}_${{SLURM_ARRAY_TASK_ID}}_core_${{line_idx}}"
-    mkdir -p "$NODE_LOCAL_DIR"
-    cp "./$TARGET_MSD_FILE" "$NODE_LOCAL_DIR/"
-    (
-        cd "$NODE_LOCAL_DIR"
-        export OMP_NUM_THREADS=1
-        export MKL_NUM_THREADS=1
-        export OPENBLAS_NUM_THREADS=1
-
-        {remote_binary_path}/molspin "$TARGET_MSD_FILE"
-
-        BASE_NAME=$(basename "$TARGET_MSD_FILE" .msd)
-        cp ./*.log "{remote_results_dir}/" 2>/dev/null
-        cp ./*.dat "{remote_results_dir}/" 2>/dev/null
-
-        rm -rf "$NODE_LOCAL_DIR"
-    ) &
+    python "$WORKER_PATH" \
+        "$MANIFEST_PATH"  \
+        "$line_idx"        \
+        "{remote_results_dir}" \
+        "{remote_logs_dir}" \
+        "{remote_binary_path}" &
 done
-wait
+wait 
+
 echo "Array node $SLURM_ARRAY_TASK_ID computations done"
-if [ "$SLURM_ARRAY_TASK_ID" -eq "$((SLURM_ARRAY_TASK_COUNT - 1))" ]; then
-    echo "Last array task finished computing. Monitoring workspace for final file writes"
-    
-    EXPECTED_FILES={total_tasks}
-    CURRENT_FILES=0
-    
-    while [ "$CURRENT_FILES" -lt "$EXPECTED_FILES" ]; do
-        # Count only files ending in .dat inside the directory
-        CURRENT_FILES=$(ls -1 "{remote_results_dir}"/*.dat 2>/dev/null | wc -l)
-        echo "Workspace progress: $CURRENT_FILES / $EXPECTED_FILES files written. Checking again in 5s..."
-        if [ "$CURRENT_FILES" -lt "$EXPECTED_FILES" ]; then
-            sleep 5
-        fi
-    done
+"""
+        
+        epilogue_script = rf"""#!/bin/bash
+#SBATCH --job-name=molspin_python_{project_name}_tarball
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --partition={partition}
+#SBATCH --time={walltime}
+#SBATCH --output={remote_logs_dir}/epi_%j.out
+#SBATCH --error={remote_logs_dir}/epi_%j.err
 
-    PARENT_DIR=$(dirname "{remote_results_dir}")
-    BASE_DIR=$(basename "{remote_results_dir}")
-
-    cd "{remote_results_dir}"
-    
-    echo "All files verified on disk! Launching compute-node compression"
-    tar -cf "$PARENT_DIR/workspace_$SLURM_ARRAY_JOB_ID.tar" *.dat *.log
-    echo "Tarball created successfully at: $PARENT_DIR/workspace_$SLURM_ARRAY_JOB_ID.tar"
+REMOTE_RESULTS_DIR="$HOME/molspin_run_workspace"
+PARENT_DIR="${{REMOTE_RESULTS_DIR%/*}}"
+BASE_DIR="${{REMOTE_RESULTS_DIR##*/}}"
+cd "$REMOTE_RESULTS_DIR" || {{ echo "Directory not found! Exiting." >&2; exit 1; }}
+ARCHIVE_OUT="${{PARENT_DIR}}/workspace_${{SLURM_ARRAY_JOB_ID}}.tar"
+if ls *.npz *.log >/dev/null 2>&1; then
+    tar -cf "$ARCHIVE_OUT" *.dat *.log
+    echo "Tarball created successfully at: $ARCHIVE_OUT"
+else
+    echo "Error: No .npz or .log files found in $REMOTE_RESULTS_DIR" >&2
+    exit 1
 fi
 """
-        return script
+        return job_script,epilogue_script
 
     def execute_remote_deployment(self, steps, resolved_dict, project_name, manager, template : FileTemplate.FileTemplate, 
                                   remote_binary_path, remote_working_dir,partition, walltime,calcs_per_node,max_nodes, **kwargs):
@@ -176,26 +173,41 @@ fi
 
         start_id = 0
         msd_filenames = []
-        
+        compressor = MsdHandling.SequentialSweepCompressor()
         for i in range(steps):
             manager.run(i)
 
-            resolved_dict['settings']['general']['steps'] = 1
+            snapshot = copy.deepcopy(resolved_dict)
+            snapshot['settings']['general']['steps'] = 1
 
             for val, key in enumerate(resolved_dict['tasks']):
                 base_output_name = f"./{project_name}-{key}-{i}"
-                resolved_dict['tasks'][key]['logfile'] = f"{base_output_name}.log"
-                resolved_dict['tasks'][key]['datafile'] = f"{base_output_name}.dat"
+                snapshot['tasks'][key]['logfile'] = f"{base_output_name}.log"
+                snapshot['tasks'][key]['datafile'] = f"{base_output_name}.dat"
 
-            snapshot = copy.deepcopy(resolved_dict)
             filename = f"{project_name}_{start_id + i}.msd"
             msd_filenames.append(filename)
+            rendered_str = template.render(snapshot)
+            compressor.process_rendered_string(rendered_str)
 
-            remote_file_path = f"{remote_results_dir}/{filename}"
-            template.render_to_file_ssh(snapshot,remote_file_path,sftp)
+            #remote_file_path = f"{remote_results_dir}/{filename}"
+            #template.render_to_file_ssh(snapshot,remote_file_path,sftp)
+
+        template, sweep_data = compressor.build_payloads()
+        MsdHandling.writeLocal(template, sweep_data, f"{project_name}_hpc.jsonl")
+        MsdHandling.writeLocalCompressed(template, sweep_data, f"{project_name}_hpc.jsonl.gz")
+        sftp.put(f"{project_name}_hpc.jsonl.gz",f"{remote_results_dir}/{project_name}_hpc.jsonl.gz")
+        os.remove(f"{project_name}_hpc.jsonl.gz")
+        package_root = os.path.join(os.path.dirname(os.path.abspath(__file__)),"hpc_worker.py")
+        sftp.put(package_root, f"{remote_results_dir}/hpc_worker.py")
+
         msd_filenames.sort()
         with sftp.file(f"{remote_results_dir}/hpc_job_map.txt", 'w') as f:
             f.write("\n".join(msd_filenames) + "\n")
+        
+        pipeline_filename = "submit_pipeline.sh"
+        pipeline_root = os.path.join(os.path.dirname(os.path.abspath(__file__)),pipeline_filename)
+        sftp.put(pipeline_root, f"{remote_results_dir}/{pipeline_filename}")
 
         total_tasks = len(msd_filenames)
         
@@ -211,7 +223,7 @@ fi
         allocated_hours = math.ceil(est_single_job_hours * safety_buffer)
         walltime_str = f"{allocated_hours:02d}:00:00"
 
-        slurm_template = self._generate_slurm_script(
+        slurm_template,epilogue = self._generate_slurm_script(
             remote_results_dir=remote_results_dir,
             remote_logs_dir=remote_logs_dir,
             remote_binary_path=remote_binary_path,
@@ -219,26 +231,34 @@ fi
             walltime=walltime_str,
             total_tasks=total_tasks,
             project_name=project_name,
+            calcs_per_node=calcs_per_node,
             max_concurrent=calcs_per_node,
             total_array_nodes=total_array_nodes,
             max_nodes=max_nodes
         )
         submitted_job_ids = []
-        script_filename = "submit_pipeline.sh"
-        remote_script_path = f"{remote_working_dir}/{script_filename}"
+        #script_filename = "submit_pipeline.sh"
+        script_filename = "job_script.sh"
+        epilogue_filename = "epilogue_script.sh"
+        remote_script_path = f"{remote_results_dir}/{script_filename}"
+        remote_epi_path = f"{remote_results_dir}/{epilogue_filename}"
         with sftp.file(remote_script_path, 'w') as f:
-                f.write(slurm_template)
-        submit_cmd = f"sbatch {remote_script_path}"
+            f.write(slurm_template)
+        with sftp.file(remote_epi_path, 'w') as f:
+            f.write(epilogue)
+        submit_cmd = f"bash {remote_results_dir}/{pipeline_filename}"
         _, stdout, stderr = hpc_ssh.exec_command(submit_cmd)
         output_str = stdout.read().decode('utf-8')
         error_str = stderr.read().decode('utf-8')
 
-        match = re.search(r"Submitted batch job (\d+)", output_str)
+        match = re.search(r"submitted:(\d+),(\d+)", output_str.lower())
         if match:
-            current_job_id = match.group(1)
-            submitted_job_ids.append(current_job_id)
-            last_job_id = current_job_id
-            print(f"Successfully queued job | Slurm ID: {current_job_id}")
+            main_job = match.group(1)
+            tarball_job = match.group(2)
+            submitted_job_ids.append(main_job)
+            submitted_job_ids.append(tarball_job)
+            #last_job_id = current_job_id
+            print(f"Successfully queued job | Slurm ID: {main_job}")
         else:
             print(f"Error executing batch script {script_filename} on HPC.")
             print(f"HPC Diagnostics: {error_str}")
@@ -301,6 +321,7 @@ fi
             hpc_ssh.close()
             return False
         
+        job_ids.pop()
         target_tar_files = [f"workspace_{jid}.tar" for jid in job_ids]
         verified_tar_files = []
         for tar_file in target_tar_files:
@@ -395,7 +416,7 @@ fi
         bar_length = 50
         start_time = None
         retry = 0
-        total_tasks = int(total_tasks)
+        total_tasks = int(total_tasks) + 1
 
         try:
             while True:

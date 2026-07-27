@@ -80,6 +80,4 @@ def _SaveToNPZ(lines, filename, **kwargs):
     np.savez(filename, **save_dict)
     if not silent:
         print(f"Saved {filename} to .npz file")
-
-    # Implement the logic to process multiple files in a batch
-    pass
+    return

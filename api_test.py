@@ -82,7 +82,17 @@ def main():
 
 def StrainT1times():
     #potentially create a wrapper object for the dictionary that encompesses the case map but behaves like a normal dictionary otherwise, so that the user can use the case map to access values in the dictionary without worrying about the case sensitivity of the keys. This would be a more elegant solution than having to pass around the case map separately and manually use it to access values in the dictionary.
-    dat = MolSpinPy.msd.MsdHandling.ConvertMSDtoDictionary("NV_centre_N14_GS_T-0.msd")
+    #dat = MolSpinPy.msd.MsdHandling.ConvertMSDtoDictionary("NV_centre_N14_GS_T-0.msd")
+    dat = MolSpinPy.msd.MsdHandling.ConvertMSDtoDictionary("NV_centre_N14.msd")
+
+    #@MolSpinPy.ActionScript
+    #def IsotropicPhononBath(step, var, state, start, stop, num):
+    #    return
+
+    
+    #creating a test action variable
+    test_list_var = MolSpinPy.objects.DictionaryBoundVariable.test_create(dat, 'spinsystems.GS.interactions.strain_modulated.e')
+
     StrainModAction = MolSpinPy.objects.Action(dat, MolSpinPy.objects.Actions.LogSpaceVector(start = 5e-6, stop = 5e-2, num = 100, Exponent = False, Normalize = False,direction = MolSpinPy.maths.vector.Vector("1.0 1.0 1.0")), duration = 100, loop = True, key = 'spinsystems.GS.interactions.strain_modulated.e')
     StrainFixedAction = MolSpinPy.objects.Action(dat, MolSpinPy.objects.Actions.LogSpaceVector(start = 1e-5, stop = 1e-1, num = 100, Exponent = False, Normalize = False, direction = MolSpinPy.maths.vector.Vector("1.0 1.0 1.0")), duration = 100, loop = True, key = 'spinsystems.GS.interactions.strain.e')
     manager = MolSpinPy.runtime.ActionManager()
@@ -92,13 +102,20 @@ def StrainT1times():
     project.attach_dict(dat)
     project._extract_settings()
     project.attach_ActionManager(manager)
-    #id = project.SubmitToHPC(hpc_username="u28375",hpc_host="glogin-p2.hpc.gwdg.de",
-    #hpc_key_path="~/.ssh/id_ed25519", remote_binary_path="/projects/extern/nhr/nhr_ni/nip00058/dir.project/MolSpinBenji/MolSpin",
-    #remote_working_dir="/user/benjamin.tigg/u28375", partition="standard96", walltime="48:00:00", max_nodes=5, max_concurrent=10, est_sim_time=20, safety_buffer=1.4)
+    project.LoadHPC(hpc_username="u28375",hpc_host="glogin-p2.hpc.gwdg.de", hpc_key_path="~/.ssh/id_ed25519", remote_working_dir="/user/benjamin.tigg/u28375")
+    project.UpdateBinary("/projects/extern/nhr/nhr_ni/nip00058/dir.project/MolSpinBenji","/projects/extern/nhr/nhr_ni/nip00058/dir.project/armadillo-12")
+    return
+    id = project.SubmitToHPC(hpc_username="u28375",hpc_host="glogin-p2.hpc.gwdg.de",
+    hpc_key_path="~/.ssh/id_ed25519", remote_binary_path="/projects/extern/nhr/nhr_ni/nip00058/dir.project/MolSpinBenji",
+    remote_working_dir="/user/benjamin.tigg/u28375", partition="standard96s:test", walltime="1:00:00", max_nodes=5, max_concurrent=10, est_sim_time=0.5, safety_buffer=1.4)
     #id= 13921951
+    #id = ['14453268','14453267']
     project.WatchHPC(id)
-    #project.DownloadFromHPC(id, remote_working_dir="/user/benjamin.tigg/u28375", local_npz_output_path="results/")
-    project.Deploy(NPZ = True, max_processes = 20)
+    #project.LoadHPC(hpc_username="u28375",hpc_host="glogin-p2.hpc.gwdg.de",
+    #    hpc_key_path="~/.ssh/id_ed25519", remote_binary_path="/projects/extern/nhr/nhr_ni/nip00058/dir.project/MolSpinBenji",
+    #    remote_working_dir="/user/benjamin.tigg/u28375")
+    project.DownloadFromHPC(id, remote_working_dir="/user/benjamin.tigg/u28375", local_npz_output_path="results/")
+    #project.Deploy(NPZ = True, max_processes = 20)
 
 def StrainPL():
     dat = MolSpinPy.msd.MsdHandling.ConvertMSDtoDictionary("NV_centre_N14.msd")
@@ -128,5 +145,5 @@ def StrainPL():
     project.Deploy(NPZ=True, max_processes=20)
 
 
-#StrainT1times()
-StrainPL()
+StrainT1times()
+#StrainPL()

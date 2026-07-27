@@ -149,7 +149,7 @@ class Project():
     
     @staticmethod
     def _find_all_paths(binary = "molspin"):
-        if os.name == "nt" and not binary.endswidth(".exe"):
+        if os.name == "nt" and not binary.endswith(".exe"):
             binary += ".exe"
 
         path_env = os.environ.get("PATH", "")
@@ -451,7 +451,7 @@ class Project():
             except:
                 print("Warning: Could not automatically extract settings. Defaulting to 1 step.")
                 self._settings['steps'] = 1
-        steps = int(self._settings['steps'])
+        steps = (kwargs.get('steps', self._settings['steps']))
 
         io_queue = None
 
@@ -488,7 +488,7 @@ class Project():
 
                 self._resolved_dict['tasks'][key]['logfile'] = logfile
                 self._resolved_dict['tasks'][key]['datafile'] = resultfile
-            self._resolved_dict['settings']['general']['steps'] = 1
+            #self._resolved_dict['settings']['general']['steps'] = 1
 
             snapshot = copy.deepcopy(self._resolved_dict)
 
@@ -516,10 +516,20 @@ class Project():
             output_dir=output_dir,
             parallel=True,
             max_workers=max_processes,
-            NPZ = True
+            NPZ = npz
         )
         if not execution_clear:
             raise RuntimeError("Deployment pipeline halted: Anomalies caught during MolSpin processing execution.")
+        
+        if not npz:
+            return [f"outputs/{output_dir}",f"outputs/{output_dir}/molspin_results"]
+        else:
+            return [f"outputs/{output_dir}",f"outputs/{output_dir}/molspin_npz"]
+
+    def LoadHPC(self, hpc_username, hpc_host, hpc_key_path, remote_working_dir, **kwargs):
+        if self._hpc == None:
+            self._hpc = RemoteHpcOrchestrator(hpc_username, hpc_host, hpc_key_path, kwargs.pop('proxy_host', None))
+            self._hpc.remote_working_dir = remote_working_dir
         
     def SubmitToHPC(self, hpc_username, hpc_host, hpc_key_path, remote_binary_path, remote_working_dir, **kwargs):
         if self._hpc == None:
@@ -532,7 +542,7 @@ class Project():
         job_id = self._hpc.execute_remote_deployment(
             project_name=self.name,
             steps=int(self._settings.get('steps', 1)),
-            resolved_dict=copy.deepcopy(self._resolved_dict),
+            resolved_dict=self._resolved_dict,
             manager=self._manager,
             remote_binary_path=remote_binary_path,
             remote_working_dir=remote_working_dir,
@@ -548,7 +558,7 @@ class Project():
     def WatchHPC(self, job_id):
         if self._hpc == None:
             return RuntimeError("No HPC project found")
-        self._hpc.watch_hpc_job(job_id=job_id, total_tasks=self._settings['steps'],poll_interval=5)
+        self._hpc.watch_hpc_job(job_id=job_id, total_tasks=self._settings.get('steps',1),poll_interval=5)
     
     def DownloadFromHPC(self, job_id, remote_working_dir, local_npz_output_path):
         #orchestrator = RemoteHpcOrchestrator(hpc_username, hpc_host, hpc_key_path, proxy_host)
@@ -558,5 +568,81 @@ class Project():
             project_name=self.name,
             remote_working_dir=remote_working_dir,
             local_npz_path=local_npz_output_path,
-            job_id=job_id
+            job_ids=job_id
         )
+
+    def UpdateBinary(self, remote_binary_path,armadillo_path,partition = "standard96",hpc_module_list = None):
+        if self._hpc == None:
+            return RuntimeError("No HPC connection found - use LoadHPC() first to establish a connection.")
+        check_cmd = f"[ -d '{remote_binary_path}/.git' ] && echo 'VALID' || echo 'INVALID'"
+        hpcssh = self._hpc._connect()
+        _,stdout,_ = hpcssh.exec_command(check_cmd)
+        if stdout.read().decode('utf-8').strip() != "VALID":
+            print(f"Error: {remote_binary_path} is not a valid Git repository.")
+            return False
+        branch_cmd = f"cd {remote_binary_path} && git branch --show-current"
+        _, stdout, stderr = hpcssh.exec_command(branch_cmd)
+        active_branch = stdout.read().decode('utf-8').strip() or "main"
+
+        print(f"Detected active branch: '{active_branch}' for folder '{remote_binary_path.split('/')[-1]}'")
+        fetch_cmd = (
+            f"cd {remote_binary_path} && "
+            f"git fetch --all"
+            #f"git pull origin {active_branch} && "
+        )
+
+        exit_status = stderr.channel.recv_exit_status()
+
+        _, stdout, stderr = hpcssh.exec_command(fetch_cmd)
+        hash_cmd = (
+            f"cd {remote_binary_path} && "
+            f"git rev-parse HEAD && "
+            f"git rev-parse origin/{active_branch}"
+        )
+        _, stdout, _ = hpcssh.exec_command(hash_cmd)
+        local_hash, remote_hash = stdout.read().decode('utf-8').strip().split()
+        if local_hash == remote_hash:
+            print(f"MolSpin is already up-to-date on branch '{active_branch}'. No action required.")
+            #return True
+        upgrade_cmd = (
+            f"cd {remote_binary_path} && "
+            f"git reset --hard origin/{active_branch} && "
+            f"git clean -fd"
+        )
+        _, stdout, stderr = hpcssh.exec_command(upgrade_cmd)
+        stdout_output = stdout.read().decode('utf-8').strip()
+        stderr_output = stderr.read().decode('utf-8').strip()
+        if stderr.channel.recv_exit_status() != 0:
+            print(f"Error during Git pull: {stderr_output}")
+            return False
+        print(f"Git pull successful. Output:\n{stdout_output}")
+        modules = f"-lopenblas -llapack -fopenmp -DARMA_NO_DEBUG"
+        armadillo_string = f"ARMADILLO = -larmadillo {modules}"
+        old_path = f"path/to/armadillo/installdir"
+        modify_makefile_cmd = (
+            f"cd {remote_binary_path} && " 
+            f"sed -i 's|^{armadillo_string}|# {armadillo_string}|g' makefile && "
+            f"sed -i 's|^# ARMADILLO = -I/{old_path}/include/ -DARMA_DONT_USE_WRAPPER -fopenmp|ARMADILLO = -I{armadillo_path}/include/ {modules} -DARMA_DONT_USE_WRAPPER|g' makefile"
+        )
+
+        _, _, stderr = hpcssh.exec_command(modify_makefile_cmd)
+        if stderr.channel.recv_exit_status() != 0:
+            print(f"Failed to modify Makefile:\n{stderr.read().decode('utf-8')}")
+            return None
+        clean_cmd = f"cd {remote_binary_path} && make clean"
+        _, _, stderr = hpcssh.exec_command(clean_cmd)
+        wait = stderr.channel.recv_exit_status()
+        module_load_string = " && ".join([f"module load {mod}" for mod in (hpc_module_list or [])])
+        compile_cmd = (
+            f"cd {remote_binary_path} && "
+            f"srun -p {partition} -N 1 -c 16 --time=00:30:00 --job-name='MolSpinCompile' "
+            f"sh -c 'module purge && {module_load_string} && make -j16'"
+        )
+
+        _, stdout, stderr = hpcssh.exec_command(compile_cmd)
+        if stderr.channel.recv_exit_status() != 0:
+            print("C++ Compilation failed on the compute node!")
+            print(f"HPC Diagnostics (stderr):\n{stderr.read().decode('utf-8')}")
+            return None
+        print("MolSpin successfully updated.")
+

@@ -22,18 +22,19 @@ class ActionVariable:
     #    return getattr(self._target, name)
     #def __repr__(self):
     #    return f"Wrapper"
-
 class DictionaryBoundVariable:
-    def __init__(self, registry, key):
+    def __init__(self, registry, key, **kwargs):
         self.registry = registry
         self.key = key
         self.name = key
+        self.sep = kwargs.get('sep', ' ')
+        self.type = 'None'
     def _get_target(self):
         keys = self.key.split('.')
         current = self.registry
         for key in keys[:-1]:
             current = current[key]
-        return current,keys[-1] if len(keys) > 1 else keys[0]
+        return current,keys[-1].lower() if len(keys) > 1 else keys[0].lower()
     #will need to change this properly to handle all the different data types
     @property
     def value(self):
@@ -46,8 +47,11 @@ class DictionaryBoundVariable:
             val = maths.vector.Vector(val)
         elif t == 'matrix':
             val = maths.tensor.CreateTensor(c,v)
+        elif t == 'list':
+            val = maths.list.List(val, sep=self.sep)
         else:
             raise ValueError("Type not supported")
+        self.type = t
         return getattr(val, 'value', val)
     @value.setter
     def value(self,val):
@@ -55,10 +59,23 @@ class DictionaryBoundVariable:
         item = container[final_key]
         if hasattr(item, 'value'):
             item.value = val
+        elif self.type == 'list':
+            container[final_key] = self.sep.join(map(str,val))
         else:
             container[final_key] = str(val)
+
     def __repr__(self):
         return f"DictHandle({self.key}: {self.value})"
+    
+    @classmethod
+    def test_create(cls,registry, key, **kwargs):
+        try:
+            handle = cls(registry, key, **kwargs)
+            _ = handle.value
+            return True
+        except Exception as e:
+            print(f"Error creating DictionaryBoundVariable for key '{key}': {e}")
+            return False
     
 class BoundVariable:
     def __init__(self, instance, descriptor : ActionVariable):

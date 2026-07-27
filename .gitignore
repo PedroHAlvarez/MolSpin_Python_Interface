@@ -8,3 +8,9 @@ _pycache_\*
 *.tar.gz
 *.npz
 *.out
+*.jsonl
+*.tar
+DataManagment.py
+resonance_frequency_scan.py
+
+*.txt
