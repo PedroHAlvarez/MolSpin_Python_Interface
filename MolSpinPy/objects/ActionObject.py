@@ -220,13 +220,17 @@ class Action():
             result_type = type(result)
             
             #array check
-            if result_type == test_type and test_type == np.ndarray:
+            if test_type == np.ndarray and (result_type == test_type or result_type == list):
                 a = (len(result) == len(test_var))
                 if not a:
-                    raise ValueError(f"Dimensionality mismatch between, the return object of ActionScript: {result.shape()} and the shape of the actionVariable: {test_var.shape()}")
+                    res_shape = result.shape() if hasattr(result, 'shape') else f"[{len(result)}]"
+                    test_shape = test_var.shape() if hasattr(test_var, 'shape') else f"[{len(test_var)}]"
+                    raise ValueError(f"Dimensionality mismatch between, the return object of ActionScript: {res_shape} and the shape of the actionVariable: {test_shape}")#
+                
+            is_valid_type = isinstance(result, test_type) or (test_type == np.ndarray and isinstance(result, list))
 
             #final check
-            if result is not None and not isinstance(result,test_type):
+            if result is not None and not is_valid_type:
                 raise ValueError(f"Type mismatch betweeen, the return object of ActionScript: {type(result).__name__} and the type of the actionVariable: {type(test_var).__name__}")
             
             print("PASSED")

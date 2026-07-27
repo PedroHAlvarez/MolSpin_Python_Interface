@@ -516,10 +516,15 @@ class Project():
             output_dir=output_dir,
             parallel=True,
             max_workers=max_processes,
-            NPZ = True
+            NPZ = npz
         )
         if not execution_clear:
             raise RuntimeError("Deployment pipeline halted: Anomalies caught during MolSpin processing execution.")
+        
+        if not npz:
+            return [f"outputs/{output_dir}",f"outputs/{output_dir}/molspin_results"]
+        else:
+            return [f"outputs/{output_dir}",f"outputs/{output_dir}/molspin_npz"]
 
     def LoadHPC(self, hpc_username, hpc_host, hpc_key_path, remote_working_dir, **kwargs):
         if self._hpc == None:
