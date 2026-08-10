@@ -144,6 +144,11 @@ def StrainPL():
     #project._dryRun()
     project.Deploy(NPZ=True, max_processes=20)
 
+def test():
+    dat = MolSpinPy.msd.MsdHandling.ConvertMSDtoDictionary("base_inputfile.msd")
+    print(dat)
 
-StrainT1times()
+
+#StrainT1times()
 #StrainPL()
+test()

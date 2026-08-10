@@ -4,10 +4,13 @@ class Lexer:
     def __init__(self,text):
         text = re.sub(r'//.*', '', text) #removes comments
         self.text = text
-        token_quotes = r"''[^']*''|\[^\"]*\""
-        token_identifiers = r"[\w\d\.\(\)\|<>+-]+"
+        #token_quotes = r"''[^']*''|\[^\"]*\""
+        token_quotes = r'"[^"]*"|\'[^\']*\''
+        token_calls = r"\w+\s*\([^)]*\)"
+        #token_identifiers = r"[\w\d\.\(\)\|<>+-]+"
+        token_identifiers = r"[\w\d\.|<>+-]+"
         token_symbols = r"[={}();,]"
-        pattern = f"({token_quotes}|{token_identifiers}|{token_symbols})"
+        pattern = f"({token_quotes}|{token_calls}|{token_identifiers}|{token_symbols})"
         self.token_pattern = re.compile(pattern)
         self.tokens = self.token_pattern.findall(self.text)
         self.pos = 0
