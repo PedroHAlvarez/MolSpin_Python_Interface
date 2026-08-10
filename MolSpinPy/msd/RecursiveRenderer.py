@@ -99,7 +99,7 @@ class RecursiveRenderer:
                         obj[top_cat] = {}
                     spin_type= content.get("type", "nucleus").lower()
                     category = "electrons" if spin_type == "electron" else "nuclei"
-                    if category not in obj:
+                    if category not in obj[top_cat]:
                         obj[top_cat][category] = {}
                     obj[top_cat][category][name] = content
                 else:
