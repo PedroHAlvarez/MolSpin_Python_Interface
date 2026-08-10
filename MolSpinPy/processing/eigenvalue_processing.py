@@ -10,7 +10,7 @@ import pandas as pd
 class EigenValueSpectrumTool:
     def __init__(
         self,
-        data: Union[str, pd.DataFrame],
+        data: Union[str, List[str], pd.DataFrame],
         mixing_threshold: float = 0.70,
         cmap: Union[str, mcolors.Colormap] = "tab10",
         time_step : Optional[Union[float,int]] = None,
@@ -227,7 +227,7 @@ class EigenValueSpectrumTool:
         else:
             ax.legend(title="Eigenstate", bbox_to_anchor=(1.02, 1), loc="upper left")
         ax.set_xlabel(self.x_var)
-        ax.set_ylabel("Energy Eigenvalue ($meV$)")
+        ax.set_ylabel("Energy Eigenvalue ($rad/ns$)")
         if title is None:
             title = "Energy Spectrum"
             if self.is_time_dependent and self.time_col:
@@ -324,7 +324,7 @@ class EigenValueSpectrumTool:
             ax.legend(
                 by_label.values(),
                 by_label.keys(),
-                title="Partner State", loc="upper right", fontsize=8)
+                title="Partner State", loc="upper left", fontsize=8)
 
         for idx in range(num_panels, len(axes_flat)):
             fig.delaxes(axes_flat[idx])

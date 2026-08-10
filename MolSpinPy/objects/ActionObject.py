@@ -205,6 +205,15 @@ class Action():
 
         self.time_manager.elapsed_ticks += 1
 
+    @staticmethod
+    def can_upcast(res_type, t_type):
+        try:
+            if np.issubdtype(res_type, np.number) and np.issubdtype(t_type, np.number):
+                return np.can_cast(res_type, t_type)
+        except TypeError:
+            pass
+        return False
+
     def Test(self):
         from copy import copy
         print(f"---Testing {self.func.name}---")
@@ -227,7 +236,11 @@ class Action():
                     test_shape = test_var.shape() if hasattr(test_var, 'shape') else f"[{len(test_var)}]"
                     raise ValueError(f"Dimensionality mismatch between, the return object of ActionScript: {res_shape} and the shape of the actionVariable: {test_shape}")#
                 
-            is_valid_type = isinstance(result, test_type) or (test_type == np.ndarray and isinstance(result, list))
+            is_valid_type = (
+                isinstance(result, test_type) 
+                or (test_type == np.ndarray and isinstance(result, list))
+                or self.can_upcast(result_type, test_type)
+            )
 
             #final check
             if result is not None and not is_valid_type:
