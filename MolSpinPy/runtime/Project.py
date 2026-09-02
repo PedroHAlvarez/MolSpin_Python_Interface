@@ -5,6 +5,8 @@ from asyncio import threads
 from . import ActionManager
 from ..msd import FileTemplate , MsdHandling, MSDWriter, ProcessSingleFile
 from .RemoteDeploy import RemoteHpcOrchestrator
+from ..utility import AssertFlags
+
 import enum
 import copy
 import queue
@@ -434,7 +436,7 @@ class Project():
     def Deploy(self, **kwargs):
         npz = kwargs.get('NPZ', False)
         max_processes = kwargs.get('max_processes', 10)
-        if not self._executable_path:
+        if not self._executable_path and AssertFlags.get("ASSERT_BINARY", True):
             self._executable_path = self._find_molspin_binary()
             if not self._executable_path:
                 raise RuntimeError("MolSpin installation not found")
@@ -451,7 +453,7 @@ class Project():
             except:
                 print("Warning: Could not automatically extract settings. Defaulting to 1 step.")
                 self._settings['steps'] = 1
-        steps = (kwargs.get('steps', self._settings['steps']))
+        steps = int(kwargs.get('steps', self._settings['steps']))
 
         io_queue = None
 
@@ -512,12 +514,16 @@ class Project():
         if not is_healthy:
             raise IOError("Deployment verification failed! Data on disk is incomplete or corrupted.")
 
-        execution_clear = self.RunMolSpinDeploymentLocal(
-            output_dir=output_dir,
-            parallel=True,
-            max_workers=max_processes,
-            NPZ = npz
+        
+        if AssertFlags.get("ASSERT_DEPLOY", True):
+            execution_clear = self.RunMolSpinDeploymentLocal(
+                output_dir=output_dir,
+                parallel=True,
+                max_workers=max_processes,
+                NPZ = npz
         )
+        else:
+            execution_clear = True
         if not execution_clear:
             raise RuntimeError("Deployment pipeline halted: Anomalies caught during MolSpin processing execution.")
         

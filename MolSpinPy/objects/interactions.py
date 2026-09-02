@@ -77,6 +77,9 @@ class Zeeman_Interaction(SingleSpinInteraction):
         return f"zeeman({self.spin.name},{self._field.render_to_string()})"
     def ConvertToDictionary(self):
         dict = {}
+        dict["type"] = "zeeman"
+        dict["spins"] = self.spin.name
+        dict["field"] = self._field.render_to_string()
         #stuff
         return self.name,dict
     field = ActionVariable.ActionVariable(field)

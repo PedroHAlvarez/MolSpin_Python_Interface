@@ -77,7 +77,7 @@ def list_input(list_str):
     num = r"[-+]?(?:\d+\.?\d*|\.\d+)(?:[eE][-+]?\d+)?"
     seperator = r"(?:[\s,]+)"
     body = rf"{num}(?:{seperator}{num})*"
-    pattern = rf"^\s*[\[\(]?\s*({body})\s*[\]\)]?\s*$"
+    pattern = rf'^\s*"?\s*\[?\[?({body})\s*[\/\])]?\s*"?\s*$'
     return bool(re.match(pattern, list_str))
 
 def is_float(s : str):

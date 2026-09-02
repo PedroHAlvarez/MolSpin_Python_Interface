@@ -10,6 +10,8 @@ _pycache_\*
 *.out
 *.jsonl
 *.tar
+/*.py
+!/api_test.py
 DataManagment.py
 resonance_frequency_scan.py
 

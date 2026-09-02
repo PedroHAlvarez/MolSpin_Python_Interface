@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 
 # MolSpin Interaction Parameters (MHz and mT)
 D = 1336.0           # MHz
-Axx, Ayy, Azz = 9.8/10, 8.6/10, 10.7/10  # MHz
+Axx, Ayy, Azz = 9.8, 8.6, 10.7  # MHz
 gamma_e = 28.024     # MHz / mT
 gamma_n = -0.008465  # MHz / mT
 

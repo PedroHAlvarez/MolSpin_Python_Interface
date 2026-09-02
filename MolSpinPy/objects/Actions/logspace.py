@@ -61,3 +61,39 @@ class LogSpaceVector(ActionFunction.ActionFunction):
         self._step += 1
         #print(val)
         return val
+
+from MolSpinPy.maths.list import List
+class LogSpaceList(ActionFunction.ActionFunction):
+    def __init__(self, start, stop, num, direction : List = None, Normalize = True, base = 10, Exponent = True, length = 3):
+        super().__init__()
+        if direction == None:
+            list_str = " ".join(["0.0"]*(length-1)) + " 1.0"
+            direction = List(list_str)
+        if not isinstance(direction,List):
+            raise AttributeError(f"Attribute direction has to be type List")
+        if not Exponent: #that means the start and stop are not exponents and so can't be plugged into logspace directly
+            start = np.log(start)/np.log(base)
+            stop = np.log(stop)/np.log(base)
+        self._param_names = ['sequence']
+        self.sequence = np.logspace(start,stop,num,base=base)
+        self._param['sequence'] = self.sequence
+        self._internal_func = self.LogSpaceListLogic
+        if(Normalize):
+            direction.norm1()
+        self._direction = direction
+    def LogSpaceListLogic(self, step, var, state, sequence):
+        if step == 0:
+            state.index = 0
+        if state.index == len(sequence):
+            state.index = 0
+        if state.index < len(sequence):
+            val = sequence[state.index]
+            state.index += 1
+            val = self._direction.multiply(val)
+            return val.value
+        return var.value
+    def DoStep(self, var):
+        val = self.LogSpaceListLogic(self._step, var, self._state, self.sequence)
+        self._step += 1
+        #print(val)
+        return val

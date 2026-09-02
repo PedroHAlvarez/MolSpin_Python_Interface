@@ -11,7 +11,7 @@ class List:
         self.sep = sep
         self._values = None
     def parse_from_string(self):
-        clean = self.list_str.strip().replace('[', '').replace(']','')
+        clean = self.list_str.strip().replace('[', '').replace(']','').replace('"','')
         if not regex_functions.list_input(clean):
             raise ValueError(f"Invalid list input format: {self.list_str}")
         self._values = np.fromstring(clean, sep=self.sep)
@@ -107,6 +107,16 @@ class List:
             new_val = self.value * other
             return_list._values = new_val
         return return_list
+
+    def norm1(self):
+        sum_squared = 0.0
+        for i in range(0,self.length):
+            sum_squared += self.value[i] * self.value[i]
+        factor = 1 / math.sqrt(sum_squared)
+        new_val = []
+        for i in range(0,self.length):
+            new_val.append(self.value[i] * factor)
+        self._values = np.array(new_val, dtype=np.float64)
 
     def __neg__(self):
         return List.from_numpy(self.value * -1)

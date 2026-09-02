@@ -146,6 +146,8 @@ def StrainPL():
 
 def test():
     dat = MolSpinPy.msd.MsdHandling.ConvertMSDtoDictionary("base_inputfile.msd")
+    _template = MolSpinPy.msd.FileTemplate.get_template("BasicTemplate.msd")
+    _template.render_to_file(dat, "output.msd")
     print(dat)
 
 
