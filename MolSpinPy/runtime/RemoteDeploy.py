@@ -104,9 +104,9 @@ module purge
 module load gcc/11.5.0
 module load openblas
 module load netlib-lapack
-module load python
+module load python/3.11.9
 
-source {remote_binary_path}/molspin_pyi/bin/activate
+source {remote_binary_path}/molspinpyi_env/bin/activate
 
 cd {remote_results_dir}
 CALCS_PER_NODE={cal_per_node}
@@ -226,6 +226,8 @@ fi
         safety_buffer=kwargs.get('safety_buffer', 1.2)
         allocated_hours = math.ceil(est_single_job_hours * safety_buffer)
         walltime_str = f"{allocated_hours:02d}:00:00"
+        if walltime is not None:
+            walltime_str = walltime
 
         slurm_template,epilogue = self._generate_slurm_script(
             remote_results_dir=remote_results_dir,
