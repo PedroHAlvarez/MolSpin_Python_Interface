@@ -71,7 +71,7 @@ class RemoteHpcOrchestrator:
 
     def _generate_slurm_script(self, remote_results_dir, remote_logs_dir, remote_binary_path, 
                            partition, walltime, total_tasks, project_name, max_concurrent, 
-                           calcs_per_node, total_array_nodes,max_nodes):
+                           calcs_per_node, total_array_nodes,max_nodes, email_address = ""):
         print(f"--- Generating Slurm Script Blueprint ---")
         print(f" - Project: {project_name}")
         print(f" - Active Walltime Limit: {walltime}")
@@ -83,6 +83,9 @@ class RemoteHpcOrchestrator:
         cal_per_node = calcs_per_node
         manifest_name = f"{project_name}_hpc.jsonl.gz"
         worker_path = f"hpc_worker.py"
+        email_script = ""
+        if email_address != "":
+            email_script = f"#SBATCH --mail-type=BEGIN,END,FAIL\n#SBATCH --mail-user={email_address}"
 
         job_script = f"""#!/bin/bash
 #SBATCH --job-name=molspin_python_{project_name}
@@ -94,6 +97,7 @@ class RemoteHpcOrchestrator:
 #SBATCH --array=1-{total_array_nodes}%{max_nodes}
 #SBATCH --output={remote_logs_dir}/array_%A_%a.out
 #SBATCH --error={remote_logs_dir}/array_%A_%a.err
+{email_script}
 
 
 module purge
@@ -234,7 +238,8 @@ fi
             calcs_per_node=calcs_per_node,
             max_concurrent=calcs_per_node,
             total_array_nodes=total_array_nodes,
-            max_nodes=max_nodes
+            max_nodes=max_nodes,
+            email_address=kwargs.get('email', "")
         )
         submitted_job_ids = []
         #script_filename = "submit_pipeline.sh"
