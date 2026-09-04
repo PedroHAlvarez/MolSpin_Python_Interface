@@ -71,7 +71,7 @@ class RemoteHpcOrchestrator:
 
     def _generate_slurm_script(self, remote_results_dir, remote_logs_dir, remote_binary_path, 
                            partition, walltime, total_tasks, project_name, max_concurrent, 
-                           calcs_per_node, total_array_nodes,max_nodes, email_address = ""):
+                           calcs_per_node, total_array_nodes,max_nodes, armadillo_path,email_address = ""):
         print(f"--- Generating Slurm Script Blueprint ---")
         print(f" - Project: {project_name}")
         print(f" - Active Walltime Limit: {walltime}")
@@ -105,6 +105,8 @@ module load gcc/11.5.0
 module load openblas
 module load netlib-lapack
 module load python/3.11.9
+
+export LD_LIBRARY_PATH="{armadillo_path}/lib64:$LD_LIBRARY_PATH"
 
 source {remote_binary_path}/molspinpyi_env/bin/activate
 
@@ -241,6 +243,7 @@ fi
             max_concurrent=calcs_per_node,
             total_array_nodes=total_array_nodes,
             max_nodes=max_nodes,
+            armadillo_path=kwargs.get("armadillo",""),
             email_address=kwargs.get('email', "")
         )
         submitted_job_ids = []

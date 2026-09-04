@@ -610,25 +610,37 @@ class Project():
         if local_hash == remote_hash:
             print(f"MolSpin is already up-to-date on branch '{active_branch}'. No action required.")
             #return True
-        upgrade_cmd = (
-            f"cd {remote_binary_path} && "
-            f"git reset --hard origin/{active_branch} && "
-            f"git clean -fd"
-        )
-        _, stdout, stderr = hpcssh.exec_command(upgrade_cmd)
-        stdout_output = stdout.read().decode('utf-8').strip()
-        stderr_output = stderr.read().decode('utf-8').strip()
-        if stderr.channel.recv_exit_status() != 0:
-            print(f"Error during Git pull: {stderr_output}")
-            return False
-        print(f"Git pull successful. Output:\n{stdout_output}")
+        if AssertFlags.get("ASSERT_GIT", True):
+            upgrade_cmd = (
+                f"cd {remote_binary_path} && "
+                f"git reset --hard origin/{active_branch} && "
+                f"git clean -fd"
+            )
+            _, stdout, stderr = hpcssh.exec_command(upgrade_cmd)
+            stdout_output = stdout.read().decode('utf-8').strip()
+            stderr_output = stderr.read().decode('utf-8').strip()
+            if stderr.channel.recv_exit_status() != 0:
+                print(f"Error during Git pull: {stderr_output}")
+                return False
+            print(f"Git pull successful. Output:\n{stdout_output}")
+        else:
+            print("Skipping Git pull due to flag ASSERT_GIT=False. Ensure your repository is up-to-date manually.")
         modules = f"-lopenblas -llapack -fopenmp -DARMA_NO_DEBUG"
         armadillo_string = f"ARMADILLO = -larmadillo {modules}"
         old_path = f"path/to/armadillo/installdir"
+        #modify_makefile_cmd = (
+        #    f"cd {remote_binary_path} && " 
+        #    f"sed -i 's|^{armadillo_string}|# {armadillo_string}|g' makefile && "
+        #    f"sed -i 's|^# ARMADILLO = -I/{old_path}/include/ -DARMA_DONT_USE_WRAPPER -fopenmp|ARMADILLO = -I{armadillo_path}/include/ {modules} -DARMA_DONT_USE_WRAPPER|g' makefile"
+        #)
+
+        armadillo_cflags = f"ARMADILLO_CFLAGS = -I{armadillo_path}/include"
+        armadillo_libs = f"ARMADILLO_LIBS = -L{armadillo_path}/lib64 -larmadillo"
+
         modify_makefile_cmd = (
-            f"cd {remote_binary_path} && " 
-            f"sed -i 's|^{armadillo_string}|# {armadillo_string}|g' makefile && "
-            f"sed -i 's|^# ARMADILLO = -I/{old_path}/include/ -DARMA_DONT_USE_WRAPPER -fopenmp|ARMADILLO = -I{armadillo_path}/include/ {modules} -DARMA_DONT_USE_WRAPPER|g' makefile"
+            f"cd {remote_binary_path} && "
+            f"sed -i 's|^ARMADILLO_CFLAGS ?=.*|{armadillo_cflags}|g' makefile && "
+            f"sed -i 's|^ARMADILLO_LIBS ?=.*|{armadillo_libs}|g' makefile"
         )
 
         _, _, stderr = hpcssh.exec_command(modify_makefile_cmd)
@@ -642,7 +654,7 @@ class Project():
         compile_cmd = (
             f"cd {remote_binary_path} && "
             f"srun -p {partition} -N 1 -c 16 --time=00:30:00 --job-name='MolSpinCompile' "
-            f"sh -c 'module purge && {module_load_string} && make -j16'"
+            f"bash -l -c 'module purge && {module_load_string} && make -j16'"
         )
 
         _, stdout, stderr = hpcssh.exec_command(compile_cmd)

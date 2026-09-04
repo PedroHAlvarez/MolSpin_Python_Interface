@@ -9,6 +9,9 @@ import mmap
 
 
 def ProcessSingleFile(filename, output_dir):
+    if filename.endswith(".log"):
+        return
+    print(f"DEBUG: Processing file: {filename}")
     lines = _ReadFile(filename)
     base_name = os.path.basename(filename)
     output_path = os.path.join(output_dir, f"{base_name}.npz")
@@ -25,16 +28,19 @@ def _ReadFile(filename):
 
 def _SaveToNPZ(lines, filename):
     header_names = lines[0]
+    print(f"DEBUG: Header names extracted: {header_names}")
+    print(f"DEBUG: Number of data rows: {len(lines) - 1}")
     data_rows = np.array(lines[1:])
     save_dict = {}
-    save_dict['_group_map'] = data_rows[:,0]
+    save_dict['_group_map'] = np.array([row[0] for row in data_rows])
     for i,name in enumerate(header_names):
         if i == 0: continue
-        col_data = data_rows[:,i]
+        col_data = [row[i] if i < len(row) else '' for row in data_rows]
         try:
-            save_dict[name] = col_data.astype(float)
+            save_dict[name] = np.array(col_data, dtype=float)
         except ValueError:
-            save_dict[name] = col_data
+            save_dict[name] = np.array(col_data, dtype=object)
+
     np.savez(filename, **save_dict)
 
 def reconstruct(manifest_path, task_idx, output_dir, gzip_file = True):

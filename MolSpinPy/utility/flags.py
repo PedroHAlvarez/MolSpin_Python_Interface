@@ -4,6 +4,7 @@ class AssertFlags:
     _INITIAL_FLAGS = {
         "ASSERT_BINARY": True,
         "ASSERT_DEPLOY": True,
+        "ASSERT_GIT": True,
     }
 
     _flags = _INITIAL_FLAGS.copy()
