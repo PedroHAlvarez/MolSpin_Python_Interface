@@ -156,7 +156,7 @@ BASE_DIR="${{REMOTE_RESULTS_DIR##*/}}"
 cd "$REMOTE_RESULTS_DIR" || {{ echo "Directory not found! Exiting." >&2; exit 1; }}
 ARCHIVE_OUT="${{PARENT_DIR}}/workspace_${{SLURM_ARRAY_JOB_ID}}.tar"
 if ls *.npz *.log >/dev/null 2>&1; then
-    tar -cf "$ARCHIVE_OUT" *.dat *.log
+    tar -cf "$ARCHIVE_OUT" *.npz *.log
     echo "Tarball created successfully at: $ARCHIVE_OUT"
 else
     echo "Error: No .npz or .log files found in $REMOTE_RESULTS_DIR" >&2

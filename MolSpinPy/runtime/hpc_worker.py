@@ -123,7 +123,7 @@ def run(molspin, file, results_dir, task_idx,scratch_dir):
 
     cluster_logs = os.path.join(results_dir,"cluster_logs")
     for item in os.listdir(scratch_dir):
-        if item.endswith(".dat") or item.endswith(".log"):
+        if item.endswith(".dat"): #or item.endswith(".log"):
             source_path = os.path.join(scratch_dir, item)
             destination_path = os.path.join(results_dir, item)
             shutil.copy2(source_path, destination_path)
