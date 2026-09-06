@@ -8,6 +8,8 @@ import textwrap
 from types import SimpleNamespace
 
 class ActionFunction:
+    metadata_note = None
+
     def __init__(self):
         #required parameters
         self._step = 0
@@ -25,6 +27,9 @@ class ActionFunction:
     def __setattr__(self, name, value):
         if name.startswith('_'):
             super().__setattr__(name,value)
+            return
+        if name == 'metadata_note':
+            super().__setattr__(name, value)
             return
         allowed = getattr(self,'_param_names',[])
         if name in allowed:

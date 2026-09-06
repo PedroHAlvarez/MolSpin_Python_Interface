@@ -5,6 +5,7 @@ from asyncio import threads
 from . import ActionManager
 from ..msd import FileTemplate , MsdHandling, MSDWriter, ProcessSingleFile
 from .RemoteDeploy import RemoteHpcOrchestrator
+from .Metadata import ProjectMetadata
 from ..utility import AssertFlags
 
 import enum
@@ -467,6 +468,14 @@ class Project():
         if output_dir:
             print(f"Creating project directory: {target}")
             os.makedirs(output_dir, exist_ok=True)
+
+        ProjectMetadata(
+            self.name,
+            self._template,
+            self._base_dict,
+            self._manager,
+            self._settings,
+        ).write(output_dir, steps=steps, execution_mode="local")
 
 
         io_queue = queue.Queue()

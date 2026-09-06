@@ -26,6 +26,9 @@ class LogSpaceScalar(ActionFunction.ActionFunction):
         self._step += 1
         #print(val)
         return val
+
+    def __metadata__(self):
+        return None #will update
     
 from MolSpinPy.maths.vector import Vector
 class LogSpaceVector(ActionFunction.ActionFunction):
@@ -62,6 +65,9 @@ class LogSpaceVector(ActionFunction.ActionFunction):
         #print(val)
         return val
 
+    def __metadata__(self):
+        return None #will update
+
 from MolSpinPy.maths.list import List
 class LogSpaceList(ActionFunction.ActionFunction):
     def __init__(self, start, stop, num, direction : List = None, Normalize = True, base = 10, Exponent = True, length = 3):
@@ -97,3 +103,6 @@ class LogSpaceList(ActionFunction.ActionFunction):
         self._step += 1
         #print(val)
         return val
+
+    def __metadata__(self):
+        return None #will update

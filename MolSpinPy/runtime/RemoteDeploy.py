@@ -12,6 +12,7 @@ import re
 
 from . import ActionManager
 from ..msd import FileTemplate , MsdHandling, MSDWriter
+from .Metadata import ProjectMetadata
 
 class RemoteHpcOrchestrator:
     def __init__(self, username, hpc_host, key_path, proxy_host=None):
@@ -176,6 +177,30 @@ fi
         _, stdout, _ = hpc_ssh.exec_command(f"rm -rf {remote_results_dir} && mkdir -p {remote_logs_dir}")
 
         exit_status = stdout.channel.recv_exit_status()
+
+        metadata = ProjectMetadata(
+            project_name,
+            template,
+            resolved_dict,
+            manager,
+            resolved_dict.get('settings', {}),
+        )
+        metadata_json, metadata_markdown = metadata.write(
+            ".",
+            steps=steps,
+            execution_mode="hpc",
+            extra={
+                "remote_working_dir": remote_working_dir,
+                "partition": partition,
+                "walltime": walltime,
+                "max_concurrent": calcs_per_node,
+                "max_nodes": max_nodes,
+            },
+        )
+        #sftp.put(metadata_json, f"{remote_results_dir}/project_metadata.json")
+        #sftp.put(metadata_markdown, f"{remote_results_dir}/project_metadata.md")
+        #os.remove(metadata_json)
+        #os.remove(metadata_markdown)
 
         start_id = 0
         msd_filenames = []
