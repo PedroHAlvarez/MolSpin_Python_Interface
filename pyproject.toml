@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=45", "wheel", "setuptools_scm[toml]>=6.2"]
+requires = ["setuptools>=45", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -9,9 +9,7 @@ description = "Python interface for MolSpin"
 readme = "README.md"
 requires-python = ">=3.8"
 license = {text = "MIT"}
-authors = [
-    {name = "Pedro H. Alvarez", email = "pedro.alvarez@example.com"}
-]
+
 keywords = ["molspin", "spin", "chemistry"]
 classifiers = [
     "Development Status :: 3 - Alpha",

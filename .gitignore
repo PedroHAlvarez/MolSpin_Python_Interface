@@ -16,5 +16,5 @@ DataManagment.py
 resonance_frequency_scan.py
 *metadata.json
 *.md
-
+*.egg-info
 *.txt
