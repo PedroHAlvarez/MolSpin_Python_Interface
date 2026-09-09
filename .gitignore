@@ -11,6 +11,7 @@ _pycache_\*
 *.jsonl
 *.tar
 /*.py
+!/MolSpinPy/resources/*/*.msd
 !/api_test.py
 DataManagment.py
 resonance_frequency_scan.py
