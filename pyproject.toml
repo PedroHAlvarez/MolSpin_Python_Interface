@@ -9,6 +9,9 @@ description = "Python interface for MolSpin"
 readme = "README.md"
 requires-python = ">=3.8"
 license = {text = "MIT"}
+authors = [
+    {name = "Pedro H. Alvarez", email = "pedro.alvarez@example.com"}
+]
 keywords = ["molspin", "spin", "chemistry"]
 classifiers = [
     "Development Status :: 3 - Alpha",
@@ -20,11 +23,11 @@ classifiers = [
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
 ]
-
-[project.dependencies]
-numpy = ">=1.20.0"
-matplotlib = ">=3.3.0"
-paramiko = ">=2.11.0"
+dependencies = [
+    "numpy>=1.20.0",
+    "matplotlib>=3.3.0",
+    "paramiko>=2.11.0",
+]
 
 [project.optional-dependencies]
 dev = ["pytest>=6.0", "pytest-cov", "black", "flake8"]
