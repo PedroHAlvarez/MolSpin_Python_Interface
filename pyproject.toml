@@ -32,3 +32,6 @@ dev = ["pytest>=6.0", "pytest-cov", "black", "flake8"]
 
 [tool.setuptools]
 packages = ["MolSpinPy"]
+
+[tool.setuptools.package-data]
+MolSpinPy = ["resources/templates/*"]

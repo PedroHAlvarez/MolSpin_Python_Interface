@@ -1,6 +1,7 @@
 import os
 import re
 import paramiko
+from pathlib import Path
 
 from . import nodes
 
@@ -88,9 +89,12 @@ class FileTemplate:
 
 
 
-def get_template(file_path, folder = "templates"):
-    file_path = os.path.join(folder, file_path)
-    absolute_path = os.path.abspath(file_path)
+def get_template(file_path, folder = None):
+    if folder == None:
+        folder = Path(__file__).parent / "resources" / "templates"
+    else:
+        folder = Path(folder)
+    absolute_path = str((folder / file_path).resolve())
     if not hasattr(get_template, "_cache"):
         get_template._cache = {}
     if absolute_path not in get_template._cache:
