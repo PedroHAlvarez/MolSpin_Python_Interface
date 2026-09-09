@@ -13,6 +13,7 @@ import re
 from . import ActionManager
 from ..msd import FileTemplate , MsdHandling, MSDWriter
 from .Metadata import ProjectMetadata
+from ..utility import AssertFlags
 
 class RemoteHpcOrchestrator:
     def __init__(self, username, hpc_host, key_path, proxy_host=None):
@@ -178,25 +179,35 @@ fi
 
         exit_status = stdout.channel.recv_exit_status()
 
-        metadata = ProjectMetadata(
-            project_name,
-            template,
-            resolved_dict,
-            manager,
-            resolved_dict.get('settings', {}),
-        )
-        metadata_json, metadata_markdown = metadata.write(
-            ".",
-            steps=steps,
-            execution_mode="hpc",
-            extra={
-                "remote_working_dir": remote_working_dir,
-                "partition": partition,
-                "walltime": walltime,
-                "max_concurrent": calcs_per_node,
-                "max_nodes": max_nodes,
-            },
-        )
+        if AssertFlags.get("ASSERT_METADATA"):
+            metadata = ProjectMetadata(
+                project_name,
+                template,
+                resolved_dict,
+                manager,
+                resolved_dict.get('settings', {}),
+            )
+            metadata_json, metadata_markdown = metadata.write(
+                ".",
+                steps=steps,
+                execution_mode="hpc",
+                extra={
+                    "remote_working_dir": remote_working_dir,
+                    "partition": partition,
+                    "walltime": walltime,
+                    "max_concurrent": calcs_per_node,
+                    "max_nodes": max_nodes,
+                },
+            )
+        else:
+            print("Skipping metadata generation due to ASSERT_METADATA=False")
+
+        if AssertFlags.get("ASSERT_DEPLOY") == False:
+            print("Skipping remote deployment due to ASSERT_DEPLOY=False.")
+            return None
+
+
+
         #sftp.put(metadata_json, f"{remote_results_dir}/project_metadata.json")
         #sftp.put(metadata_markdown, f"{remote_results_dir}/project_metadata.md")
         #os.remove(metadata_json)

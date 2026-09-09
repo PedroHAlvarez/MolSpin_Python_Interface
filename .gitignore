@@ -14,5 +14,7 @@ _pycache_\*
 !/api_test.py
 DataManagment.py
 resonance_frequency_scan.py
+*metadata.json
+*.md
 
 *.txt

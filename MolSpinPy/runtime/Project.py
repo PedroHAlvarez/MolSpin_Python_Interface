@@ -469,13 +469,16 @@ class Project():
             print(f"Creating project directory: {target}")
             os.makedirs(output_dir, exist_ok=True)
 
-        ProjectMetadata(
-            self.name,
-            self._template,
-            self._base_dict,
-            self._manager,
-            self._settings,
-        ).write(output_dir, steps=steps, execution_mode="local")
+        if AssertFlags.get("ASSERT_METADATA"):
+            ProjectMetadata(
+                self.name,
+                self._template,
+                self._base_dict,
+                self._manager,
+                self._settings,
+            ).write(output_dir, steps=steps, execution_mode="local")
+        else:
+            print("Skipping metadata generation due to ASSERT_METADATA=False")
 
 
         io_queue = queue.Queue()

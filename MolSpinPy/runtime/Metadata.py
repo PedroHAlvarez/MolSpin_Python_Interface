@@ -137,8 +137,8 @@ class ProjectMetadata:
     def write(self, output_dir, steps=None, execution_mode=None, extra=None):
         os.makedirs(output_dir, exist_ok=True)
         metadata = self.as_dict(steps, execution_mode, extra)
-        json_path = os.path.join(output_dir, "project_metadata.json")
-        markdown_path = os.path.join(output_dir, "project_metadata.md")
+        json_path = os.path.join(output_dir, f"{self.project_name}_metadata.json")
+        markdown_path = os.path.join(output_dir, f"{self.project_name}_metadata.md")
         with open(json_path, "w", encoding="utf-8") as metadata_file:
             json.dump(metadata, metadata_file, indent=2, sort_keys=False)
         with open(markdown_path, "w", encoding="utf-8") as readable_file:
