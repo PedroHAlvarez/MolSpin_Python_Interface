@@ -129,6 +129,11 @@ class Action():
 
     def __setattr__(self, name, value):
 
+        prop = getattr(type(self), name, None)
+        if isinstance(prop, property) and prop.fset is not None:
+            prop.fset(self,value)
+            return
+    
         def value_check(value, name):
             if value != None:
                 expected = self.func._param_types.get(name)
