@@ -32,7 +32,7 @@ class ActionManager:
             raise e 
     def run(self,current_step,dry=False):
         if not self._is_sorted:
-            self._actions.sort(key=lambda x: x.effective_priority, reverse=True)
+            self._actions.sort(key=lambda x: x.effective_priority, reverse=False)
         if not self._is_tested:
             self.test_all()
         for action in self._actions:

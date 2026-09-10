@@ -2,6 +2,7 @@ import os
 import re
 import paramiko
 from pathlib import Path
+from importlib import resources
 
 from . import nodes
 
@@ -91,7 +92,8 @@ class FileTemplate:
 
 def get_template(file_path, folder = None):
     if folder == None:
-        folder = Path(__file__).parent / "resources" / "templates"
+        package_root = resources.files("MolSpinPy")
+        folder = Path(str(package_root)) / "resources" / "templates"
     else:
         folder = Path(folder)
     absolute_path = str((folder / file_path).resolve())

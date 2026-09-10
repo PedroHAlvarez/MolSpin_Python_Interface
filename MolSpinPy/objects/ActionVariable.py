@@ -33,7 +33,14 @@ class DictionaryBoundVariable:
         keys = self.key.split('.')
         current = self.registry
         for key in keys[:-1]:
-            current = current[key]
+            key_l = key.lower()
+            og_keys = [dict_key for dict_key in current.keys()]
+            all_keys = [dict_key.lower() for dict_key in og_keys]
+            try:
+                idx = all_keys.index(key_l)
+            except ValueError:
+                raise f"key {self.key} not valid, error is at {key}"
+            current = current[og_keys[idx]]
         return current,keys[-1].lower() if len(keys) > 1 else keys[0].lower()
     #will need to change this properly to handle all the different data types
     @property

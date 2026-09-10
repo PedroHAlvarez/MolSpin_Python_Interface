@@ -21,11 +21,11 @@ class TimeManager():
             current = current.parent
         if clock_source:
             p_loops = clock_source.time_manager.completed_loops
-            if p_loops < 1:
-                return None
+            #if p_loops < 1 and act.start:
+            #    return None
             if p_loops < act.start: return None
             if(p_loops - act.start) % act.interval != 0: return None
-            if clock_source.func._step != 1: return None
+            if clock_source.func._step != 1 and act.func._step != 0: return None
         else:
             if self.death_offset is None:
                 self.death_offset = global_step
@@ -89,16 +89,22 @@ class Action():
     
     @property
     def priority(self):
-        return int(self._priority)
+        try:
+            return int(self._priority)
+        except (TypeError, ValueError):
+            return 0
     
     @priority.setter
     def priority(self,z):
-        self._priority = z
+        if isinstance(z, tuple):
+            self._priority = int(z[-1])
+        else:
+            self._priority = int(z)
 
     @property
     def effective_priority(self):
         if self.parent is None:
-            return int(self.priority)
+            return (self.priority,)
         return self.parent.effective_priority + (self.priority,)
     
     def add_child(self, child):
