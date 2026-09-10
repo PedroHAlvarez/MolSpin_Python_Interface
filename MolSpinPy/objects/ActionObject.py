@@ -25,14 +25,18 @@ class TimeManager():
             #    return None
             if p_loops < act.start: return None
             if(p_loops - act.start) % act.interval != 0: return None
-            if clock_source.func._step != 1 and act.func._step != 0: return None
+            # Get per-action step counters
+            clock_step = clock_source.func._steps_per_action.get(id(clock_source), 0)
+            act_step = act.func._steps_per_action.get(id(act), 0)
+            if clock_step != 1 and act_step != 0: return None
         else:
             if self.death_offset is None:
                 self.death_offset = global_step
             relative_step = global_step-self.death_offset
             if relative_step < act.start: return None
             if (relative_step - act.start) % act.interval != 0: return None
-        return act.func._step
+        # Return per-action step counter
+        return act.func._steps_per_action.get(id(act), 0)
 class Action():
     def __init__(self, target, func = ActionFunction.ActionFunction, **kwargs):
         super().__setattr__('_ACTION_ARGS',{'duration','loop','interval','active','parent'})#, 'name', 'priority', 'value', 'state', 'effective_priority'})
@@ -195,7 +199,9 @@ class Action():
         if self.duration is not None and local_step >= self.duration:
             if self.loop:
                 self.time_manager.completed_loops += 1
-                self.func._step = 0
+                # Reset per-action step counter
+                action_id = id(self)
+                self.func._steps_per_action[action_id] = 0
                 local_step = 0
             else:
                 self.time_manager.completed_loops += 1
@@ -204,9 +210,12 @@ class Action():
                     self.parent.kill_commands[self] = True
                 return None if not return_logic else False
         if return_logic:
-            self.func._step += 1
+            action_id = id(self)
+            if action_id not in self.func._steps_per_action:
+                self.func._steps_per_action[action_id] = 0
+            self.func._steps_per_action[action_id] += 1
             return True
-        new_value = self.func.DoStep(self.ptr)
+        new_value = self.func.DoStep(self.ptr, action_id=id(self))
         self.ptr.value = new_value
 
         self.time_manager.elapsed_ticks += 1

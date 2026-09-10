@@ -13,6 +13,7 @@ class ActionFunction:
     def __init__(self):
         #required parameters
         self._step = 0
+        self._steps_per_action = {}  # Track step counter for each action
         
         self._param = {}
         super().__setattr__('_state',SimpleNamespace())
@@ -38,7 +39,7 @@ class ActionFunction:
             self._param[name] = value
             return
         raise AttributeError(f"No parameter named {name}")
-    def DoStep(self, var : ActionVariable):
+    def DoStep(self, var : ActionVariable, action_id=None):
         raise NotImplementedError("Sub classes should implement their own DoStep function")
     def BindValues(self,value_list = [], value_dictionary = {}, source_obj = None):
         raise NotImplementedError("Sub classes should implement their own BindValues function")
@@ -166,11 +167,20 @@ class CustomActionFunction(ActionFunction):
                     self._param[key] = val
                 else:
                     break
-    def DoStep(self, var : ActionVariable):
-        result = self._internal_func(self._step, var, self.state, **self._param)
+    def DoStep(self, var : ActionVariable, action_id=None):
+        if action_id is None:
+            action_id = id(var)
+        
+        if action_id not in self._steps_per_action:
+            self._steps_per_action[action_id] = 0
+        
+        step = self._steps_per_action[action_id]
+        result = self._internal_func(step, var, self.state, **self._param)
+        
         if result == None:
             result = var.value
-        self._step += 1
+        
+        self._steps_per_action[action_id] += 1
         return result
     
 def ActionScript(func):
