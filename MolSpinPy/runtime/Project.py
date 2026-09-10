@@ -469,18 +469,6 @@ class Project():
             print(f"Creating project directory: {target}")
             os.makedirs(output_dir, exist_ok=True)
 
-        if AssertFlags.get("ASSERT_METADATA"):
-            ProjectMetadata(
-                self.name,
-                self._template,
-                self._base_dict,
-                self._manager,
-                self._settings,
-            ).write(output_dir, steps=steps, execution_mode="local")
-        else:
-            print("Skipping metadata generation due to ASSERT_METADATA=False")
-
-
         io_queue = queue.Queue()
         workers = []
         num_workers = 20
@@ -525,6 +513,17 @@ class Project():
         is_healthy = self.VerifyIntegrity(output_dir, expected_steps=steps, file_prefix=self._name)
         if not is_healthy:
             raise IOError("Deployment verification failed! Data on disk is incomplete or corrupted.")
+
+        if AssertFlags.get("ASSERT_METADATA"):
+            ProjectMetadata(
+                self.name,
+                self._template,
+                self._base_dict,
+                self._manager,
+                self._settings,
+            ).write(output_dir, steps=steps, execution_mode="local")
+        else:
+            print("Skipping metadata generation due to ASSERT_METADATA=False")
 
         
         if AssertFlags.get("ASSERT_DEPLOY", True):

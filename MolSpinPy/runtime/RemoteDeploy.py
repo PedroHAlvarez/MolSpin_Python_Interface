@@ -179,29 +179,6 @@ fi
 
         exit_status = stdout.channel.recv_exit_status()
 
-        if AssertFlags.get("ASSERT_METADATA"):
-            metadata = ProjectMetadata(
-                project_name,
-                template,
-                resolved_dict,
-                manager,
-                resolved_dict.get('settings', {}),
-            )
-            metadata_json, metadata_markdown = metadata.write(
-                ".",
-                steps=steps,
-                execution_mode="hpc",
-                extra={
-                    "remote_working_dir": remote_working_dir,
-                    "partition": partition,
-                    "walltime": walltime,
-                    "max_concurrent": calcs_per_node,
-                    "max_nodes": max_nodes,
-                },
-            )
-        else:
-            print("Skipping metadata generation due to ASSERT_METADATA=False")
-
         if AssertFlags.get("ASSERT_DEPLOY") == False:
             print("Skipping remote deployment due to ASSERT_DEPLOY=False.")
             return None
@@ -246,6 +223,29 @@ fi
         msd_filenames.sort()
         with sftp.file(f"{remote_results_dir}/hpc_job_map.txt", 'w') as f:
             f.write("\n".join(msd_filenames) + "\n")
+
+        if AssertFlags.get("ASSERT_METADATA"):
+            metadata = ProjectMetadata(
+                project_name,
+                template,
+                resolved_dict,
+                manager,
+                resolved_dict.get('settings', {}),
+            )
+            metadata_json, metadata_markdown = metadata.write(
+                ".",
+                steps=steps,
+                execution_mode="hpc",
+                extra={
+                    "remote_working_dir": remote_working_dir,
+                    "partition": partition,
+                    "walltime": walltime,
+                    "max_concurrent": calcs_per_node,
+                    "max_nodes": max_nodes,
+                },
+            )
+        else:
+            print("Skipping metadata generation due to ASSERT_METADATA=False")
         
         pipeline_filename = "submit_pipeline.sh"
         pipeline_root = os.path.join(os.path.dirname(os.path.abspath(__file__)),pipeline_filename)

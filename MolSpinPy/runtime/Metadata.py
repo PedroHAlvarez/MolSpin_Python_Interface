@@ -57,7 +57,14 @@ class ProjectMetadata:
         if not isinstance(function_metadata, dict):
             function_metadata = {"note": function_metadata}
         function_metadata.setdefault("note", getattr(function, "metadata_note", None))
-        return {
+        
+        # Capture state namespace if present
+        state_dict = {}
+        state_obj = getattr(function, "_state", None)
+        if state_obj is not None and hasattr(state_obj, "__dict__"):
+            state_dict = self._value(state_obj.__dict__)
+        
+        action_metadata = {
             "id": None,
             "target": target_name,
             "function": getattr(function, "name", type(function).__name__),
@@ -77,6 +84,12 @@ class ProjectMetadata:
             "parent_id": None,
             "children": [],
         }
+        
+        # Only include state if it has content
+        if state_dict:
+            action_metadata["state"] = state_dict
+        
+        return action_metadata
 
     def _action_tree(self, actions):
         metadata_by_action = {}
@@ -178,8 +191,8 @@ class ProjectMetadata:
             "",
         ]
         def render_action(action, depth=0):
-            heading = "#" * min(depth + 3, 6)
-            lines.extend([
+            heading = "#" * (depth+3)
+            action_lines = [
                 f"{heading} Action {action['id']}: {action['target']}",
                 f"- Function: `{action['function']}`",
                 f"- Note: {action['function_metadata'].get('note') or 'None'}",
@@ -187,8 +200,14 @@ class ProjectMetadata:
                 f"- Priority: {action['priority']}",
                 f"- Timing: `{json.dumps(action['timing'], sort_keys=True)}`",
                 f"- Function parameters: `{json.dumps(action['function_parameters'], sort_keys=True)}`",
-                "",
-            ])
+            ]
+            
+            # Include state if present
+            if "state" in action and action["state"]:
+                action_lines.append(f"- State: `{json.dumps(action['state'], sort_keys=True)}`")
+            
+            action_lines.append("")
+            lines.extend(action_lines)
             for child in action["children"]:
                 render_action(child, depth + 1)
 
