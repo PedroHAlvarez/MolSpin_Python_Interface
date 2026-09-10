@@ -11,7 +11,7 @@ class Vector:
         self._values = None
     
     def parse_from_string(self):
-        clean = self.vector_str.strip().replace('[', '').replace(']','')
+        clean = self.vector_str.strip().replace('[', '').replace(']','').replace(',','')
         if not regex_functions.vector_input(clean):
             raise ValueError(f"Invalid vector input format: {self.vector_str}")
         self._values = np.fromstring(clean, sep=' ')

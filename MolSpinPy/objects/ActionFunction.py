@@ -14,6 +14,7 @@ class ActionFunction:
         #required parameters
         self._step = 0
         self._steps_per_action = {}  # Track step counter for each action
+        self._updated = False
         
         self._param = {}
         super().__setattr__('_state',SimpleNamespace())
@@ -181,7 +182,20 @@ class CustomActionFunction(ActionFunction):
             result = var.value
         
         self._steps_per_action[action_id] += 1
+        self._updated = True
         return result
+
+    def _set_updated_to_false(self):
+        self._updated = False
+
+    def _get_updated(self):
+        return self._updated
+
+    def __metadata__(self):
+        return self.metadata_note
+
+    def add_metadata(self, md_string):
+        self.metadata_note = md_string
     
 def ActionScript(func):
     sig = inspect.signature(func)

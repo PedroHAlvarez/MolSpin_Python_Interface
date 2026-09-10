@@ -56,6 +56,8 @@ class DictionaryBoundVariable:
             val = maths.tensor.CreateTensor(c,v)
         elif t == 'list':
             val = maths.list.List(val, sep=self.sep)
+        elif t =='str':
+            val = val
         else:
             raise ValueError("Type not supported")
         self.type = t
@@ -67,6 +69,8 @@ class DictionaryBoundVariable:
         if hasattr(item, 'value'):
             item.value = val
         elif self.type == 'list':
+            container[final_key] = self.sep.join(map(str,val))
+        elif self.type == 'vec':
             container[final_key] = self.sep.join(map(str,val))
         else:
             container[final_key] = str(val)

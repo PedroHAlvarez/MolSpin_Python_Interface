@@ -139,6 +139,8 @@ def GetType(str):
     valid = list_input(str)
     if valid:
         return "list", None, str
+    else:
+        return "str", None, str
 
 def test_tensor_input():
     valid_inputs = [

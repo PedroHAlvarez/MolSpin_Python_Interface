@@ -29,6 +29,7 @@ class TimeManager():
             clock_step = clock_source.func._steps_per_action.get(id(clock_source), 0)
             act_step = act.func._steps_per_action.get(id(act), 0)
             if clock_step != 1 and act_step != 0: return None
+            if clock_step == 1 and clock_source.func._get_updated() == False: return None
         else:
             if self.death_offset is None:
                 self.death_offset = global_step
@@ -191,6 +192,7 @@ class Action():
 
         local_step = self.time_manager.GetLocalTime(global_step)
         if local_step is None:
+            self.func._set_updated_to_false()
             return None if not return_logic else False
         if hasattr(self, '_sequences'):
             for name, seq in self._sequences.items():
