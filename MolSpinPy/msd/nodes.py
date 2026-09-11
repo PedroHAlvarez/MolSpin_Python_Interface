@@ -40,8 +40,9 @@ class VarNode(Node):
                     continue
                 else:
                     return str(val)
-        if isinstance(val, str) and ' ' in val:
-            if not (val.startswith('"') and val.endswith('"')):
+        if isinstance(val, str) and ' ' in val and not ',' in val:
+            if not ('(' in val or '|' in val or '<' in val or '>' in val):
+                if not (val.startswith('"') and val.endswith('"')):
                     val = f'"{val}"'
         display_val = case_map.get(str(val).lower(), str(val))         
         return display_val

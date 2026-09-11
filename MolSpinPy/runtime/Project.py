@@ -438,7 +438,7 @@ class Project():
         npz = kwargs.get('NPZ', False)
         max_processes = kwargs.get('max_processes', 10)
         if not self._executable_path and AssertFlags.get("ASSERT_BINARY", True):
-            self._executable_path = self._find_molspin_binary()
+            self._executable_path = self._find_molspin_binary(custom_path=kwargs.get("molspin", None))
             if not self._executable_path:
                 raise RuntimeError("MolSpin installation not found")
 
@@ -575,7 +575,7 @@ class Project():
     def WatchHPC(self, job_id):
         if self._hpc == None:
             return RuntimeError("No HPC project found")
-        self._hpc.watch_hpc_job(job_id=job_id, total_tasks=self._settings.get('steps',1),poll_interval=5)
+        self._hpc.watch_hpc_job(job_id=job_id, total_tasks=self._settings.get('steps',1), project_name=self.name, poll_interval=5)
     
     def DownloadFromHPC(self, job_id, remote_working_dir, local_npz_output_path):
         #orchestrator = RemoteHpcOrchestrator(hpc_username, hpc_host, hpc_key_path, proxy_host)

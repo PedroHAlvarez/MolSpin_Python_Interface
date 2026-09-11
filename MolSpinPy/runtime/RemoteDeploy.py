@@ -152,7 +152,7 @@ echo "Array node $SLURM_ARRAY_TASK_ID computations done"
 #SBATCH --output={remote_logs_dir}/epi_%j.out
 #SBATCH --error={remote_logs_dir}/epi_%j.err
 
-REMOTE_RESULTS_DIR="$HOME/molspin_run_workspace"
+REMOTE_RESULTS_DIR="{remote_results_dir}"
 PARENT_DIR="${{REMOTE_RESULTS_DIR%/*}}"
 BASE_DIR="${{REMOTE_RESULTS_DIR##*/}}"
 cd "$REMOTE_RESULTS_DIR" || {{ echo "Directory not found! Exiting." >&2; exit 1; }}
@@ -169,11 +169,11 @@ fi
 
     def execute_remote_deployment(self, steps, resolved_dict, project_name, manager, template : FileTemplate.FileTemplate, 
                                   remote_binary_path, remote_working_dir,partition, walltime,calcs_per_node,max_nodes, **kwargs):
-        
+        base_template = template
         hpc_ssh = self._connect()
         sftp = hpc_ssh.open_sftp()
         self.remote_working_dir = remote_working_dir
-        remote_results_dir = f"{remote_working_dir.rstrip('/')}/molspin_run_workspace"
+        remote_results_dir = f"{remote_working_dir.rstrip('/')}/molspin_workspace_{project_name}"
         remote_logs_dir = f"{remote_results_dir}/cluster_logs"
         _, stdout, _ = hpc_ssh.exec_command(f"rm -rf {remote_results_dir} && mkdir -p {remote_logs_dir}")
 
@@ -227,7 +227,7 @@ fi
         if AssertFlags.get("ASSERT_METADATA"):
             metadata = ProjectMetadata(
                 project_name,
-                template,
+                base_template,
                 resolved_dict,
                 manager,
                 resolved_dict.get('settings', {}),
@@ -292,7 +292,7 @@ fi
             f.write(slurm_template)
         with sftp.file(remote_epi_path, 'w') as f:
             f.write(epilogue)
-        submit_cmd = f"bash {remote_results_dir}/{pipeline_filename}"
+        submit_cmd = f"bash {remote_results_dir}/{pipeline_filename} {remote_results_dir}"
         _, stdout, stderr = hpc_ssh.exec_command(submit_cmd)
         output_str = stdout.read().decode('utf-8')
         error_str = stderr.read().decode('utf-8')
@@ -350,7 +350,7 @@ fi
         #print(f"Job {job_id} is complete! Starting download")
         #remote_tar_path = f"{remote_working_dir.rstrip('/')}/workspace_{job_id}.tar"
         #remote_tar_path = f"{remote_working_dir.rstrip('/')}/workspace_$SLURM_ARRAY_JOB_ID.tar"
-        remote_results_dir = f"{remote_working_dir.rstrip('/')}/molspin_run_workspace"
+        remote_results_dir = f"{remote_working_dir.rstrip('/')}/molspin_workspace_{project_name}"
         parent_dir = os.path.dirname(remote_results_dir)
         #local_temp_tar = rf"./{project_name}.tar.gz"
         transport = hpc_ssh.get_transport()
@@ -444,7 +444,7 @@ fi
         print(f"Data successfully downloaded! Total time: {mins}m:{secs}s")
         return True
     
-    def watch_hpc_job(self, job_id, total_tasks, poll_interval=5):
+    def watch_hpc_job(self, job_id, total_tasks, project_name, poll_interval=5):
 
         if isinstance(job_id, str):
             job_id = [job_id]
@@ -452,9 +452,9 @@ fi
         print(f"Initializing live monitor for Slurm Jobs: {', '.join(job_id)}")
 
         remote_working_dir = f"/{self.remote_working_dir.strip('/')}"
-        remote_results_dir = f"{remote_working_dir}/molspin_run_workspace"
+        remote_results_dir = f"{remote_working_dir}/molspin_workspace_{project_name}"
         
-        remote_results_dir = f"{self.remote_working_dir.rstrip('/')}/molspin_run_workspace"
+        remote_results_dir = f"{self.remote_working_dir.rstrip('/')}/molspin_workspace_{project_name}"
         
         hpc_ssh = None
         sftp = None
