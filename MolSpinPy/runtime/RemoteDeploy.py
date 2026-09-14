@@ -9,6 +9,7 @@ import sys
 import time
 import io
 import re
+import tarfile
 
 from . import ActionManager
 from ..msd import FileTemplate , MsdHandling, MSDWriter
@@ -405,6 +406,14 @@ fi
         return submitted_job_ids
     
     def download_remote_deployment(self, project_name, remote_working_dir, local_npz_path, job_ids):
+        if self.cluster_profile == "rosa":
+            return self._download_remote_deployment_rosa(
+                project_name=project_name,
+                remote_working_dir=remote_working_dir,
+                local_npz_path=local_npz_path,
+                job_ids=job_ids,
+            )
+
         hpc_ssh = self._connect()
         if isinstance(job_ids, str):
             job_ids = [job_ids]
@@ -520,6 +529,131 @@ fi
         mins, secs = divmod(int(total_time), 60)
         print(f"Data successfully downloaded! Total time: {mins}m:{secs}s")
         return True
+
+    def _download_remote_deployment_rosa(self, project_name, remote_working_dir, local_npz_path, job_ids):
+        """ROSA-only result retrieval. Legacy GWDG download behavior stays untouched."""
+        normalized_job_ids = [str(job_ids)] if isinstance(job_ids, str) else [str(job_id) for job_id in job_ids]
+        if not normalized_job_ids:
+            print("No Slurm job IDs were supplied for ROSA result retrieval.")
+            return False
+
+        main_job_id = normalized_job_ids[0]
+        jobs_comma_separated = ",".join(normalized_job_ids)
+        remote_results_dir = f"{remote_working_dir.rstrip('/')}/molspin_workspace_{project_name}"
+        parent_dir = os.path.dirname(remote_results_dir)
+        remote_tar_path = f"{parent_dir.rstrip('/')}/workspace_{main_job_id}.tar"
+        local_output_dir = os.path.abspath(os.path.expanduser(local_npz_path))
+        local_tar_path = os.path.join(
+            local_output_dir,
+            f"workspace_{main_job_id}_{project_name}.tar",
+        )
+
+        hpc_ssh = self._connect()
+        sftp = None
+        try:
+            _, sq_out, _ = hpc_ssh.exec_command(f"squeue -j {jobs_comma_separated} -h")
+            active_jobs = sq_out.read().decode().strip()
+            if active_jobs:
+                remaining_lines = active_jobs.split("\n")
+                print(f"\n[Cluster Update]: Active Jobs found in queue ({len(remaining_lines)} rows matching).")
+                print("Run download method later.")
+                return False
+
+            print(f"\n[Success]: All tracked jobs ({jobs_comma_separated}) have finished computing!")
+
+            transport = hpc_ssh.get_transport()
+            if transport is not None:
+                transport.set_keepalive(10)
+
+            sftp = hpc_ssh.open_sftp()
+            sftp.get_channel().settimeout(15.0)
+
+            try:
+                sftp.stat(remote_results_dir)
+            except IOError:
+                print(f"Error: ROSA staging workspace directory {remote_results_dir} not found.")
+                return False
+
+            try:
+                remote_tar_stat = sftp.stat(remote_tar_path)
+            except IOError:
+                print(f"Error: Expected ROSA result archive '{remote_tar_path}' was not found.")
+                return False
+
+            os.makedirs(local_output_dir, exist_ok=True)
+
+            start_download_time = time.time()
+            stats = {
+                'last bytes': 0,
+                'last time': time.time(),
+                'current speed': 0.0
+            }
+
+            def ProgressStats(transferred, total):
+                current_time = time.time()
+                time_diff = current_time - stats['last time']
+                if time_diff >= 1.0:
+                    bytes_diff = transferred - stats['last bytes']
+                    stats['current speed'] = (bytes_diff / (1024**2)) / time_diff
+                    stats['last bytes'] = transferred
+                    stats['last time'] = current_time
+
+                done_mb = transferred / (1024**2)
+                total_mb = total / (1024**2)
+                msg = f"\rStreaming tar | Speed: {stats['current speed']:6.2f} MB/s | {done_mb:6.1f}/{total_mb:.1f} MB"
+                sys.stdout.write(msg)
+                sys.stdout.flush()
+
+            print(f"Pulling down ROSA result archive: {os.path.basename(remote_tar_path)}")
+            sftp.get(remotepath=remote_tar_path, localpath=local_tar_path, callback=ProgressStats)
+            print()
+
+            local_size = os.path.getsize(local_tar_path)
+            if local_size != remote_tar_stat.st_size:
+                print(
+                    "Error: Downloaded ROSA archive size does not match the remote archive "
+                    f"({local_size} != {remote_tar_stat.st_size})."
+                )
+                return False
+
+            with tarfile.open(local_tar_path, "r") as archive:
+                members = archive.getmembers()
+                if not members:
+                    print("Error: Downloaded ROSA result archive is empty.")
+                    return False
+
+                npz_members = [member for member in members if member.isfile() and member.name.endswith(".npz")]
+                log_members = [member for member in members if member.isfile() and member.name.endswith(".log")]
+                if not npz_members or not log_members:
+                    print("Error: Downloaded ROSA result archive does not contain both .npz and .log products.")
+                    return False
+
+                output_root = os.path.realpath(local_output_dir)
+                for member in members:
+                    target_path = os.path.realpath(os.path.join(local_output_dir, member.name))
+                    if os.path.commonpath([output_root, target_path]) != output_root:
+                        print(f"Error: Unsafe path in ROSA result archive: {member.name}")
+                        return False
+
+                archive.extractall(local_output_dir)
+
+            cleanup_cmd = f"rm -rf {remote_results_dir} {remote_tar_path}"
+            _, cleanup_out, cleanup_err = hpc_ssh.exec_command(cleanup_cmd)
+            cleanup_status = cleanup_out.channel.recv_exit_status()
+            if cleanup_status != 0:
+                cleanup_error = cleanup_err.read().decode('utf-8', errors='replace').strip()
+                print(f"Warning: ROSA results were downloaded, but remote cleanup failed: {cleanup_error}")
+                return False
+
+            total_time = time.time() - start_download_time
+            mins, secs = divmod(int(total_time), 60)
+            print(f"ROSA results downloaded and extracted to: {local_output_dir}")
+            print(f"Remote workspace scrub complete. Total time: {mins}m:{secs}s")
+            return True
+        finally:
+            if sftp is not None:
+                sftp.close()
+            hpc_ssh.close()
     
     def watch_hpc_job(self, job_id, total_tasks, project_name, poll_interval=5):
 
