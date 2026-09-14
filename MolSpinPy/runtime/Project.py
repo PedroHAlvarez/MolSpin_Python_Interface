@@ -583,7 +583,7 @@ class Project():
             manager=self._manager,
             remote_binary_path=remote_binary_path,
             remote_working_dir=remote_working_dir,
-            partition=kwargs.pop('partition', self._hpc.default_partition),
+            partition=kwargs.pop('partition', 'rosa.p' if self._hpc.cluster_profile == 'rosa' else 'standard96'),
             walltime=kwargs.pop('walltime', '01:00:00'),
             calcs_per_node=kwargs.pop('max_concurrent', 20),
             max_nodes=kwargs.pop('max_nodes', 10),
@@ -608,11 +608,12 @@ class Project():
             job_ids=job_id
         )
 
-    def UpdateBinary(self, remote_binary_path, armadillo_path=None, partition=None, hpc_module_list=None):
+    def UpdateBinary(self, remote_binary_path,armadillo_path,partition = "standard96",hpc_module_list = None):
         if self._hpc == None:
             return RuntimeError("No HPC connection found - use LoadHPC() first to establish a connection.")
-        if partition is None:
-            partition = self._hpc.default_partition
+        if getattr(self._hpc, "cluster_profile", "gwdg") == "rosa":
+            rosa_partition = "rosa.p" if partition == "standard96" else partition
+            return self._UpdateBinaryROSA(remote_binary_path, partition=rosa_partition, hpc_module_list=hpc_module_list)
         check_cmd = f"[ -d '{remote_binary_path}/.git' ] && echo 'VALID' || echo 'INVALID'"
         hpcssh = self._hpc._connect()
         _,stdout,_ = hpcssh.exec_command(check_cmd)
@@ -667,43 +668,27 @@ class Project():
         #    f"sed -i 's|^# ARMADILLO = -I/{old_path}/include/ -DARMA_DONT_USE_WRAPPER -fopenmp|ARMADILLO = -I{armadillo_path}/include/ {modules} -DARMA_DONT_USE_WRAPPER|g' makefile"
         #)
 
-        if self._hpc.profile["use_external_armadillo_path"]:
-            if not armadillo_path:
-                raise ValueError("armadillo_path is required for the 'gwdg' HPC profile.")
+        armadillo_cflags = f"ARMADILLO_CFLAGS = -I{armadillo_path}/include"
+        armadillo_libs = f"ARMADILLO_LIBS = -L{armadillo_path}/lib64 -larmadillo"
 
-            armadillo_cflags = f"ARMADILLO_CFLAGS = -I{armadillo_path}/include"
-            armadillo_libs = f"ARMADILLO_LIBS = -L{armadillo_path}/lib64 -larmadillo"
+        modify_makefile_cmd = (
+            f"cd {remote_binary_path} && "
+            f"sed -i 's|^ARMADILLO_CFLAGS ?=.*|{armadillo_cflags}|g' makefile && "
+            f"sed -i 's|^ARMADILLO_LIBS ?=.*|{armadillo_libs}|g' makefile"
+        )
 
-            modify_makefile_cmd = (
-                f"cd {remote_binary_path} && "
-                f"sed -i 's|^ARMADILLO_CFLAGS ?=.*|{armadillo_cflags}|g' makefile && "
-                f"sed -i 's|^ARMADILLO_LIBS ?=.*|{armadillo_libs}|g' makefile"
-            )
-
-            _, _, stderr = hpcssh.exec_command(modify_makefile_cmd)
-            if stderr.channel.recv_exit_status() != 0:
-                print(f"Failed to modify Makefile:\n{stderr.read().decode('utf-8')}")
-                return None
-
+        _, _, stderr = hpcssh.exec_command(modify_makefile_cmd)
+        if stderr.channel.recv_exit_status() != 0:
+            print(f"Failed to modify Makefile:\n{stderr.read().decode('utf-8')}")
+            return None
         clean_cmd = f"cd {remote_binary_path} && make clean"
         _, _, stderr = hpcssh.exec_command(clean_cmd)
         wait = stderr.channel.recv_exit_status()
-
-        modules = hpc_module_list
-        if modules is None:
-            modules = self._hpc.profile["build_modules"]
-        module_load_string = " && ".join([f"module load {mod}" for mod in modules])
-        if module_load_string:
-            module_load_string += " && "
-
-        make_args = " ".join(self._hpc.profile["build_make_args"])
-        if make_args:
-            make_args = f" {make_args}"
-
+        module_load_string = " && ".join([f"module load {mod}" for mod in (hpc_module_list or [])])
         compile_cmd = (
             f"cd {remote_binary_path} && "
             f"srun -p {partition} -N 1 -c 16 --time=00:30:00 --job-name='MolSpinCompile' "
-            f"bash -l -c 'module purge && {module_load_string}make -j16{make_args}'"
+            f"bash -l -c 'module purge && {module_load_string} && make -j16'"
         )
 
         _, stdout, stderr = hpcssh.exec_command(compile_cmd)
@@ -712,4 +697,132 @@ class Project():
             print(f"HPC Diagnostics (stderr):\n{stderr.read().decode('utf-8')}")
             return None
         print("MolSpin successfully updated.")
+
+
+    def _UpdateBinaryROSA(self, remote_binary_path, partition="rosa.p", hpc_module_list=None):
+        """ROSA-only binary update path. Legacy GWDG UpdateBinary stays untouched."""
+        hpcssh = self._hpc._connect()
+
+        def run_remote(command):
+            _, stdout, stderr = hpcssh.exec_command(command)
+            channel = stdout.channel
+            stdout_chunks = []
+            stderr_chunks = []
+
+            while True:
+                while channel.recv_ready():
+                    stdout_chunks.append(channel.recv(65536))
+                while channel.recv_stderr_ready():
+                    stderr_chunks.append(channel.recv_stderr(65536))
+
+                if channel.exit_status_ready():
+                    while channel.recv_ready():
+                        stdout_chunks.append(channel.recv(65536))
+                    while channel.recv_stderr_ready():
+                        stderr_chunks.append(channel.recv_stderr(65536))
+                    break
+
+                time.sleep(0.01)
+
+            exit_status = channel.recv_exit_status()
+            stdout_text = b"".join(stdout_chunks).decode("utf-8", errors="replace")
+            stderr_text = b"".join(stderr_chunks).decode("utf-8", errors="replace")
+            return exit_status, stdout_text, stderr_text
+
+        try:
+            check_cmd = f"[ -d '{remote_binary_path}/.git' ] && echo 'VALID' || echo 'INVALID'"
+            exit_status, stdout_output, stderr_output = run_remote(check_cmd)
+            if exit_status != 0 or stdout_output.strip() != "VALID":
+                print(f"Error: {remote_binary_path} is not a valid Git repository.")
+                if stderr_output.strip():
+                    print(stderr_output.strip())
+                return False
+
+            branch_cmd = f"cd {remote_binary_path} && git branch --show-current"
+            exit_status, stdout_output, stderr_output = run_remote(branch_cmd)
+            if exit_status != 0:
+                print(f"Failed to determine active branch:\n{stderr_output.strip()}")
+                return False
+            active_branch = stdout_output.strip() or "main"
+            print(f"Detected active branch: '{active_branch}' for folder '{remote_binary_path.split('/')[-1]}'")
+
+            fetch_cmd = f"cd {remote_binary_path} && git fetch --all"
+            exit_status, _, stderr_output = run_remote(fetch_cmd)
+            if exit_status != 0:
+                print(f"Git fetch failed:\n{stderr_output.strip()}")
+                return False
+
+            hash_cmd = (
+                f"cd {remote_binary_path} && "
+                f"git rev-parse HEAD && "
+                f"git rev-parse origin/{active_branch}"
+            )
+            exit_status, stdout_output, stderr_output = run_remote(hash_cmd)
+            if exit_status != 0:
+                print(f"Failed to compare local and remote Git revisions:\n{stderr_output.strip()}")
+                return False
+
+            revisions = stdout_output.strip().split()
+            if len(revisions) != 2:
+                print(f"Unexpected Git revision output: {stdout_output!r}")
+                return False
+            local_hash, remote_hash = revisions
+
+            status_cmd = f"cd {remote_binary_path} && git status --porcelain"
+            exit_status, status_output, stderr_output = run_remote(status_cmd)
+            if exit_status != 0:
+                print(f"Failed to inspect Git working tree:\n{stderr_output.strip()}")
+                return False
+
+            if AssertFlags.get("ASSERT_GIT", True):
+                if local_hash != remote_hash or status_output.strip():
+                    upgrade_cmd = (
+                        f"cd {remote_binary_path} && "
+                        f"git reset --hard origin/{active_branch} && "
+                        f"git clean -fd"
+                    )
+                    exit_status, stdout_output, stderr_output = run_remote(upgrade_cmd)
+                    if exit_status != 0:
+                        print(f"Error during Git synchronization:\n{stderr_output.strip()}")
+                        return False
+                    print(f"Git synchronization successful. Output:\n{stdout_output.strip()}")
+                else:
+                    print(f"MolSpin is already up-to-date and clean on branch '{active_branch}'.")
+            else:
+                print("Skipping Git synchronization due to ASSERT_GIT=False. Ensure the repository is in the desired state manually.")
+
+            clean_cmd = f"cd {remote_binary_path} && make clean"
+            exit_status, _, stderr_output = run_remote(clean_cmd)
+            if exit_status != 0:
+                print(f"make clean failed:\n{stderr_output.strip()}")
+                return False
+
+            modules = hpc_module_list or (
+                "hpc-env/13.1",
+                "Armadillo/15.0.1-foss-2023a",
+                "SciPy-bundle/2023.05-foss-2023a",
+            )
+            module_load_string = " && ".join(f"module load {mod}" for mod in modules)
+            compile_cmd = (
+                f"cd {remote_binary_path} && "
+                f"srun -p {partition} -N 1 -c 16 --time=00:30:00 --job-name='MolSpinCompile' "
+                f"bash -l -c 'module purge && {module_load_string} && "
+                f"make -j16 ARCHFLAGS= LOOPFLAGS='"
+            )
+
+            print(f"Submitting MolSpin compilation through Slurm partition '{partition}'...")
+            exit_status, stdout_output, stderr_output = run_remote(compile_cmd)
+            if exit_status != 0:
+                print("C++ compilation failed on the compute node.")
+                if stdout_output.strip():
+                    stdout_tail = "\n".join(stdout_output.strip().splitlines()[-40:])
+                    print(f"HPC Diagnostics (stdout tail):\n{stdout_tail}")
+                if stderr_output.strip():
+                    print(f"HPC Diagnostics (stderr):\n{stderr_output.strip()}")
+                return False
+
+            print("MolSpin successfully updated and compiled.")
+            return True
+        finally:
+            hpcssh.close()
 

@@ -77,18 +77,24 @@ class RemoteHpcOrchestrator:
         return self.profile["default_partition"]
 
     def _runtime_environment(self, remote_binary_path, armadillo_path=""):
-        lines = ["module purge"]
-        lines.extend(f"module load {module}" for module in self.profile["runtime_modules"])
+        if self.cluster_profile == "gwdg":
+            # Preserve the legacy GWDG runtime block byte-for-byte.
+            return f'''module purge
+module load gcc/11.5.0
+module load openblas
+module load netlib-lapack
+module load python/3.11.9
 
-        if self.profile["use_external_armadillo_path"] and armadillo_path:
-            lines.append(
-                f'export LD_LIBRARY_PATH="{armadillo_path}/lib64:${{LD_LIBRARY_PATH:-}}"'
-            )
+export LD_LIBRARY_PATH="{armadillo_path}/lib64:$LD_LIBRARY_PATH"
 
-        if self.profile["activate_venv"]:
-            lines.append(f"source {remote_binary_path}/molspinpyi_env/bin/activate")
+source {remote_binary_path}/molspinpyi_env/bin/activate'''
 
-        return "\n".join(lines)
+        return "\n".join((
+            "module purge",
+            "module load hpc-env/13.1",
+            "module load Armadillo/15.0.1-foss-2023a",
+            "module load SciPy-bundle/2023.05-foss-2023a",
+        ))
 
     @staticmethod
     def calculate_hpc_schedule(total_tasks, max_nodes=5, max_concurrent=20, 
@@ -296,18 +302,21 @@ fi
                 manager,
                 resolved_dict.get('settings', {}),
             )
+            metadata_extra = {
+                "remote_working_dir": remote_working_dir,
+                "partition": partition,
+                "walltime": walltime,
+                "max_concurrent": calcs_per_node,
+                "max_nodes": max_nodes,
+            }
+            if self.cluster_profile == "rosa":
+                metadata_extra["cluster_profile"] = "rosa"
+
             metadata_json, metadata_markdown = metadata.write(
                 ".",
                 steps=steps,
                 execution_mode="hpc",
-                extra={
-                    "remote_working_dir": remote_working_dir,
-                    "cluster_profile": self.cluster_profile,
-                    "partition": partition,
-                    "walltime": walltime,
-                    "max_concurrent": calcs_per_node,
-                    "max_nodes": max_nodes,
-                },
+                extra=metadata_extra,
             )
         else:
             print("Skipping metadata generation due to ASSERT_METADATA=False")
