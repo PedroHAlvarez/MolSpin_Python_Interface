@@ -548,13 +548,30 @@ class Project():
 
     def LoadHPC(self, hpc_username, hpc_host, hpc_key_path, remote_working_dir, **kwargs):
         if self._hpc == None:
-            self._hpc = RemoteHpcOrchestrator(hpc_username, hpc_host, hpc_key_path, kwargs.pop('proxy_host', None))
+            cluster_profile = kwargs.pop('cluster_profile', 'gwdg')
+            self._hpc = RemoteHpcOrchestrator(
+                hpc_username,
+                hpc_host,
+                hpc_key_path,
+                kwargs.pop('proxy_host', None),
+                cluster_profile=cluster_profile,
+            )
             self._hpc.remote_working_dir = remote_working_dir
         
     def SubmitToHPC(self, hpc_username, hpc_host, hpc_key_path, remote_binary_path, remote_working_dir, **kwargs):
         if self._hpc == None:
-            self._hpc = RemoteHpcOrchestrator(hpc_username, hpc_host, hpc_key_path, kwargs.pop('proxy_host', None))
+            cluster_profile = kwargs.pop('cluster_profile', 'gwdg')
+            self._hpc = RemoteHpcOrchestrator(
+                hpc_username,
+                hpc_host,
+                hpc_key_path,
+                kwargs.pop('proxy_host', None),
+                cluster_profile=cluster_profile,
+            )
             self._hpc.remote_working_dir = remote_working_dir
+        else:
+            kwargs.pop('cluster_profile', None)
+            kwargs.pop('proxy_host', None)
 
         if self._resolved_dict == {}:
             self._resolved_dict = self._base_dict
@@ -566,7 +583,7 @@ class Project():
             manager=self._manager,
             remote_binary_path=remote_binary_path,
             remote_working_dir=remote_working_dir,
-            partition=kwargs.pop('partition', 'standard96'),
+            partition=kwargs.pop('partition', self._hpc.default_partition),
             walltime=kwargs.pop('walltime', '01:00:00'),
             calcs_per_node=kwargs.pop('max_concurrent', 20),
             max_nodes=kwargs.pop('max_nodes', 10),
@@ -591,9 +608,11 @@ class Project():
             job_ids=job_id
         )
 
-    def UpdateBinary(self, remote_binary_path,armadillo_path,partition = "standard96",hpc_module_list = None):
+    def UpdateBinary(self, remote_binary_path, armadillo_path=None, partition=None, hpc_module_list=None):
         if self._hpc == None:
             return RuntimeError("No HPC connection found - use LoadHPC() first to establish a connection.")
+        if partition is None:
+            partition = self._hpc.default_partition
         check_cmd = f"[ -d '{remote_binary_path}/.git' ] && echo 'VALID' || echo 'INVALID'"
         hpcssh = self._hpc._connect()
         _,stdout,_ = hpcssh.exec_command(check_cmd)
@@ -648,27 +667,43 @@ class Project():
         #    f"sed -i 's|^# ARMADILLO = -I/{old_path}/include/ -DARMA_DONT_USE_WRAPPER -fopenmp|ARMADILLO = -I{armadillo_path}/include/ {modules} -DARMA_DONT_USE_WRAPPER|g' makefile"
         #)
 
-        armadillo_cflags = f"ARMADILLO_CFLAGS = -I{armadillo_path}/include"
-        armadillo_libs = f"ARMADILLO_LIBS = -L{armadillo_path}/lib64 -larmadillo"
+        if self._hpc.profile["use_external_armadillo_path"]:
+            if not armadillo_path:
+                raise ValueError("armadillo_path is required for the 'gwdg' HPC profile.")
 
-        modify_makefile_cmd = (
-            f"cd {remote_binary_path} && "
-            f"sed -i 's|^ARMADILLO_CFLAGS ?=.*|{armadillo_cflags}|g' makefile && "
-            f"sed -i 's|^ARMADILLO_LIBS ?=.*|{armadillo_libs}|g' makefile"
-        )
+            armadillo_cflags = f"ARMADILLO_CFLAGS = -I{armadillo_path}/include"
+            armadillo_libs = f"ARMADILLO_LIBS = -L{armadillo_path}/lib64 -larmadillo"
 
-        _, _, stderr = hpcssh.exec_command(modify_makefile_cmd)
-        if stderr.channel.recv_exit_status() != 0:
-            print(f"Failed to modify Makefile:\n{stderr.read().decode('utf-8')}")
-            return None
+            modify_makefile_cmd = (
+                f"cd {remote_binary_path} && "
+                f"sed -i 's|^ARMADILLO_CFLAGS ?=.*|{armadillo_cflags}|g' makefile && "
+                f"sed -i 's|^ARMADILLO_LIBS ?=.*|{armadillo_libs}|g' makefile"
+            )
+
+            _, _, stderr = hpcssh.exec_command(modify_makefile_cmd)
+            if stderr.channel.recv_exit_status() != 0:
+                print(f"Failed to modify Makefile:\n{stderr.read().decode('utf-8')}")
+                return None
+
         clean_cmd = f"cd {remote_binary_path} && make clean"
         _, _, stderr = hpcssh.exec_command(clean_cmd)
         wait = stderr.channel.recv_exit_status()
-        module_load_string = " && ".join([f"module load {mod}" for mod in (hpc_module_list or [])])
+
+        modules = hpc_module_list
+        if modules is None:
+            modules = self._hpc.profile["build_modules"]
+        module_load_string = " && ".join([f"module load {mod}" for mod in modules])
+        if module_load_string:
+            module_load_string += " && "
+
+        make_args = " ".join(self._hpc.profile["build_make_args"])
+        if make_args:
+            make_args = f" {make_args}"
+
         compile_cmd = (
             f"cd {remote_binary_path} && "
             f"srun -p {partition} -N 1 -c 16 --time=00:30:00 --job-name='MolSpinCompile' "
-            f"bash -l -c 'module purge && {module_load_string} && make -j16'"
+            f"bash -l -c 'module purge && {module_load_string}make -j16{make_args}'"
         )
 
         _, stdout, stderr = hpcssh.exec_command(compile_cmd)

@@ -15,13 +15,80 @@ from ..msd import FileTemplate , MsdHandling, MSDWriter
 from .Metadata import ProjectMetadata
 from ..utility import AssertFlags
 
+
+HPC_PROFILES = {
+    "gwdg": {
+        "default_partition": "standard96",
+        "runtime_modules": (
+            "gcc/11.5.0",
+            "openblas",
+            "netlib-lapack",
+            "python/3.11.9",
+        ),
+        "build_modules": (
+            "gcc/11.5.0",
+            "openblas",
+            "netlib-lapack",
+            "python/3.11.9",
+        ),
+        "activate_venv": True,
+        "use_external_armadillo_path": True,
+        "build_make_args": (),
+    },
+    "rosa": {
+        "default_partition": "rosa.p",
+        "runtime_modules": (
+            "hpc-env/13.1",
+            "Armadillo/15.0.1-foss-2023a",
+            "SciPy-bundle/2023.05-foss-2023a",
+        ),
+        "build_modules": (
+            "hpc-env/13.1",
+            "Armadillo/15.0.1-foss-2023a",
+            "SciPy-bundle/2023.05-foss-2023a",
+        ),
+        "activate_venv": False,
+        "use_external_armadillo_path": False,
+        "build_make_args": ("ARCHFLAGS=", "LOOPFLAGS="),
+    },
+}
+
+
+def get_hpc_profile(name):
+    profile_name = (name or "gwdg").lower()
+    if profile_name not in HPC_PROFILES:
+        available = ", ".join(sorted(HPC_PROFILES))
+        raise ValueError(
+            f"Unknown HPC cluster profile '{name}'. Available profiles: {available}"
+        )
+    return profile_name, copy.deepcopy(HPC_PROFILES[profile_name])
+
 class RemoteHpcOrchestrator:
-    def __init__(self, username, hpc_host, key_path, proxy_host=None):
+    def __init__(self, username, hpc_host, key_path, proxy_host=None, cluster_profile="gwdg"):
         self.username = username
         self.hpc_host = hpc_host
         self.key_path = os.path.expanduser(key_path)
         self.proxy_host = proxy_host
+        self.cluster_profile, self.profile = get_hpc_profile(cluster_profile)
         self.remote_working_dir = None
+
+    @property
+    def default_partition(self):
+        return self.profile["default_partition"]
+
+    def _runtime_environment(self, remote_binary_path, armadillo_path=""):
+        lines = ["module purge"]
+        lines.extend(f"module load {module}" for module in self.profile["runtime_modules"])
+
+        if self.profile["use_external_armadillo_path"] and armadillo_path:
+            lines.append(
+                f'export LD_LIBRARY_PATH="{armadillo_path}/lib64:${{LD_LIBRARY_PATH:-}}"'
+            )
+
+        if self.profile["activate_venv"]:
+            lines.append(f"source {remote_binary_path}/molspinpyi_env/bin/activate")
+
+        return "\n".join(lines)
 
     @staticmethod
     def calculate_hpc_schedule(total_tasks, max_nodes=5, max_concurrent=20, 
@@ -89,6 +156,11 @@ class RemoteHpcOrchestrator:
         if email_address != "":
             email_script = f"#SBATCH --mail-type=BEGIN,END,FAIL\n#SBATCH --mail-user={email_address}"
 
+        runtime_environment = self._runtime_environment(
+            remote_binary_path=remote_binary_path,
+            armadillo_path=armadillo_path,
+        )
+
         job_script = f"""#!/bin/bash
 #SBATCH --job-name=molspin_python_{project_name}
 #SBATCH --partition={partition}
@@ -102,15 +174,7 @@ class RemoteHpcOrchestrator:
 {email_script}
 
 
-module purge
-module load gcc/11.5.0
-module load openblas
-module load netlib-lapack
-module load python/3.11.9
-
-export LD_LIBRARY_PATH="{armadillo_path}/lib64:$LD_LIBRARY_PATH"
-
-source {remote_binary_path}/molspinpyi_env/bin/activate
+{runtime_environment}
 
 cd {remote_results_dir}
 CALCS_PER_NODE={cal_per_node}
@@ -238,6 +302,7 @@ fi
                 execution_mode="hpc",
                 extra={
                     "remote_working_dir": remote_working_dir,
+                    "cluster_profile": self.cluster_profile,
                     "partition": partition,
                     "walltime": walltime,
                     "max_concurrent": calcs_per_node,
