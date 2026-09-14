@@ -37,6 +37,7 @@ class Project():
         self._template = FileTemplate.get_template(template_structure)
         self._dict_template = FileTemplate._init_input_data()
         self._executable_path = None
+        self._working_dir_local = None
 
     def check_dict_structure(self,new_dict,current_template=None, path=""):
         if current_template is None:
@@ -468,6 +469,8 @@ class Project():
         if output_dir:
             print(f"Creating project directory: {target}")
             os.makedirs(output_dir, exist_ok=True)
+
+        self._working_dir_local = output_dir
 
         io_queue = queue.Queue()
         workers = []

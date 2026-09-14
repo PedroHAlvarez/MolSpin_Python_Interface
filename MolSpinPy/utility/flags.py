@@ -1,11 +1,20 @@
 from contextlib import contextmanager
-
+from typing import TypedDict, Unpack, Any
+from typing_extensions import Annotated, Doc
+class _FlagOptions(TypedDict, total=False):
+    ASSERT_BINARY: Annotated[bool,Doc()]
+    ASSERT_DEPLOY: Annotated[bool,Doc()]
+    ASSERT_GIT: Annotated[bool,Doc()]
+    ASSERT_METADATA: Annotated[bool,Doc()]
+    ASSERT_OSW: Annotated[bool,Doc("OSW- Old Staging Workspace. Uses the legacy 'molspin_run_workspace' instead of the the new 'molspin_workspace_project_name'")]
 class AssertFlags:
     _INITIAL_FLAGS = {
         "ASSERT_BINARY": True,
         "ASSERT_DEPLOY": True,
         "ASSERT_GIT": True,
         "ASSERT_METADATA": True,
+
+        "ASSERT_OSW" : False #OSW- OLD STAGING WORKSPACE - INDICATES THAT THE FOLDER WE ARE LOOKING FOR IN THE HPC IS JUST "molspin_run_workspace" AND NOT THE NEW FORMAT.
     }
 
     _flags = _INITIAL_FLAGS.copy()
@@ -43,7 +52,7 @@ class AssertFlags:
 
     @classmethod
     @contextmanager
-    def override(cls, **kwargs):
+    def override(cls, **kwargs: Unpack[_FlagOptions]):
         original = {k: cls.get(k, default=None) for k in kwargs}
     
         for k, v in kwargs.items():

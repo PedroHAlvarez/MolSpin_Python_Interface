@@ -350,7 +350,10 @@ fi
         #print(f"Job {job_id} is complete! Starting download")
         #remote_tar_path = f"{remote_working_dir.rstrip('/')}/workspace_{job_id}.tar"
         #remote_tar_path = f"{remote_working_dir.rstrip('/')}/workspace_$SLURM_ARRAY_JOB_ID.tar"
-        remote_results_dir = f"{remote_working_dir.rstrip('/')}/molspin_workspace_{project_name}"
+        if AssertFlags.get("ASSERT_OSW"):
+            remote_results_dir = f"{remote_working_dir.rstrip('/')}/molspin_workspace_{project_name}"
+        else:
+            remote_results_dir = f"{remote_working_dir.rstrip('/')}/molspin_run_workspace"
         parent_dir = os.path.dirname(remote_results_dir)
         #local_temp_tar = rf"./{project_name}.tar.gz"
         transport = hpc_ssh.get_transport()

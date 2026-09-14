@@ -6,23 +6,52 @@ import matplotlib.colors as mcolors
 import matplotlib.pyplot as plt
 import numpy as np
 import re
+import tempfile
+
+from ..runtime import Project, RemoteDeploy
+import shutil
+import atexit
+
+_SESSION_TEMP_DIR: Optional[str] = None
+
+def _get_session_temp_dir() -> str:
+    global _SESSION_TEMP_DIR
+    if _SESSION_TEMP_DIR is None or not os.path.exists(_SESSION_TEMP_DIR):
+        _SESSION_TEMP_DIR = tempfile.mkdtemp(prefix="hpc_fetch_session_")
+        atexit.register(shutil.rmtree, _SESSION_TEMP_DIR, ignore_errors=True)
+    return _SESSION_TEMP_DIR
 
 class TimeEvolutionTool:
     def __init__(
         self,
         data: Union[str, Dict[str, np.ndarray]],
+        project: Optional[Project] = None,
         time_key: Optional[str] = None,
         states_key: Optional[str] = None,
         cmap: Union[str, mcolors.Colormap] = "tab10",
         state_labels: Optional[List[str]] = None,
+        local_cache_dir: Optional[str] = None,
+        step_index: Optional[int] = None,
+        task_key: Optional[str] = None,
     ):
         self.cmap_input = cmap
         self.raw_data: Dict[str, np.ndarray] = {}
+        self.project = project
+        self.local_path: Optional[str] = None
+
+        if self.project is not None and isinstance(data, str) and not os.path.exists(data):
+            data = self._resolve_project_file(
+                target = data,
+                local_cache_dir = local_cache_dir,
+                step_index = step_index,
+                task_key=task_key,
+            )
 
         if isinstance(data, str):
             if not os.path.exists(data):
                 raise FileNotFoundError(f"The file {data} does not exist.")
-            loaded = np.load(data)
+            self.local_path = os.path.abspath(data)
+            loaded = np.load(self.local_path)
             self.raw_data = {k: loaded[k] for k in loaded.files}
         elif isinstance(data, dict):
             self.raw_data = data
@@ -52,6 +81,74 @@ class TimeEvolutionTool:
 
         self.color_map: Dict[str, Tuple[float, float, float, float]] = {}
         self._setup_colors()
+
+    def _construct_filename(self, target: str, step_index: Optional[int], task_key: Optional[str]) -> str:
+        if target and target != "auto" and target.endswith(".npz"):
+            return os.path.basename(target)
+        project_name = getattr(self.project, "name", getattr(self.project, "_name", "sim"))
+        task = task_key if task_key else "TE"
+        step = step_index if step_index is not None else 0
+        return f"{project_name}-{task}-{step}.dat.npz"
+
+    def _resolve_project_file(self, target:str, local_cache_dir: Optional[str], step_index: Optional[int], task_key: Optional[str]) -> str:
+        filename = self._construct_filename(target=target, step_index=step_index, task_key=task_key)
+
+        local_dir = getattr(self.project, "_working_dir_local", None) or getattr(self.project, "working_dir", None) or "."
+        project_name = getattr(self.project, "name", getattr(self.project, "_name", ""))
+        session_dir = _SESSION_TEMP_DIR
+
+        local_candidate_path = [
+            os.path.join(local_cache_dir, filename) if local_cache_dir else None,
+            os.path.join(session_dir, filename) if session_dir else None,
+            os.path.join(local_dir, "molspin_npz", filename),
+            os.path.join(local_dir, f"molspin_workspace_{project_name}", filename),
+            os.path.join(local_dir, filename),
+            os.path.abspath(filename),
+        ]
+        for path in local_candidate_path:
+            if path == None:
+                continue
+            if os.path.exists(path):
+                print("[StateTimeEvolutionTool]: Found local npz results file")
+                return path
+
+        if getattr(self.project, "_hpc", None) is not None:
+            return self._fetch_from_hpc(filename, local_cache_dir)
+
+        raise FileNotFoundError(
+            f"Could not locate file '{filename}' in local workspace or HPC environment."
+        )
+
+    def _fetch_from_hpc(self,filename:str,local_cache_dir:Optional[str]) -> str:
+        orchestrator = self.project._hpc
+        remote_working_dir = orchestrator.remote_working_dir
+        project_name = getattr(self.project, "name", getattr(self.project, "_name", ""))
+
+        remote_file_path = f"{remote_working_dir.rstrip('/')}/molspin_workspace_{project_name}/{filename}"
+
+        if local_cache_dir:
+            target_dir = local_cache_dir
+        else:
+            target_dir = _get_session_temp_dir()
+
+        os.makedirs(target_dir, exist_ok=True)
+        local_path = os.path.join(target_dir, filename)
+
+        print(f"[StateTimeEvolutionTool] Fetching HPC output: {remote_file_path} -> {local_path}")
+        hpc_ssh = orchestrator._connect()
+        sftp = hpc_ssh.open_sftp()
+        try:
+            sftp.get(remote_file_path, local_path)
+        except IOError as e:
+            raise FileNotFoundError(
+                f"Could not find remote HPC file: {remote_file_path}"
+            ) from e
+        finally:
+            sftp.close()
+            hpc_ssh.close()
+
+        return local_path
+
 
     def _find_time_key(self) -> Optional[str]:
         candidates = ["time(ns)", "time (ns)", "time", "times", "t_ns", "t"]
