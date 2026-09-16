@@ -608,7 +608,7 @@ class Project():
             job_ids=job_id
         )
 
-    def UpdateBinary(self, remote_binary_path,armadillo_path,partition = "standard96",hpc_module_list = None):
+    def UpdateBinary(self, remote_binary_path,armadillo_path,partition = "standard96:test",hpc_module_list = None):
         if self._hpc == None:
             return RuntimeError("No HPC connection found - use LoadHPC() first to establish a connection.")
         if getattr(self._hpc, "cluster_profile", "gwdg") == "rosa":

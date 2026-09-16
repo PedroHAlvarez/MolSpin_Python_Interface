@@ -113,7 +113,7 @@ class TimeEvolutionTool:
                 return path
 
         if getattr(self.project, "_hpc", None) is not None:
-            return self._fetch_from_hpc(filename, local_cache_dir)
+            return self._fetch_from_hpc(filename.lower(), local_cache_dir)
 
         raise FileNotFoundError(
             f"Could not locate file '{filename}' in local workspace or HPC environment."

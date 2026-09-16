@@ -65,10 +65,11 @@ def get_hpc_profile(name):
     return profile_name, copy.deepcopy(HPC_PROFILES[profile_name])
 
 class RemoteHpcOrchestrator:
-    def __init__(self, username, hpc_host, key_path, proxy_host=None, cluster_profile="gwdg"):
+    def __init__(self, username, hpc_host, key_path, proxy_host=None, cluster_profile="gwdg", config_file = '~/.ssh/config'):
         self.username = username
         self.hpc_host = hpc_host
         self.key_path = os.path.expanduser(key_path)
+        self.config_file = config_file
         self.proxy_host = proxy_host
         self.cluster_profile, self.profile = get_hpc_profile(cluster_profile)
         self.remote_working_dir = None
@@ -794,6 +795,28 @@ fi
             print(f"Job stream finished. Processed {completed_tasks}/{total_tasks} calculations. Check cluster_logs for errors.")
 
     def _connect(self):
+
+        ssh_config = paramiko.SSHConfig()
+        config_path = os.path.expanduser(self.config_file)
+
+        target_host = self.hpc_host
+        target_user = self.username
+        target_key = self.key_path
+
+        if os.path.exists(config_path):
+            with open(config_path) as f:
+                ssh_config.parse(f)
+            host_config = ssh_config.lookup(self.hpc_host)
+            target_host = host_config.get('hostname', target_host)
+            if(target_host != self.hpc_host):
+                print(f"[Network] Target host in config file differs to host provided. Updating provided host to target host {target_host}")
+                self.hpc_host = target_host
+            target_user = host_config.get('user', target_user)
+            if 'identityfile' in host_config:
+                target_key = host_config['identityfile'][0]
+            if(target_key != self.key_path):
+                print(f"[Network] Target key in config file differs to key provided. Updating provided key to target key {target_key}")
+                self.key_path = target_key
         hpc_ssh = paramiko.SSHClient()
         hpc_ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
         connect_kwargs = {
