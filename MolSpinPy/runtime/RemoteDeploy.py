@@ -674,7 +674,7 @@ fi
                     if os.path.commonpath([output_root, target_path]) != output_root:
                         print(f"Error: Unsafe path in ROSA result archive: {member.name}")
                         return False
-
+            if AssertFlags.get("ASSERT_UNPACK") == True:
                 archive.extractall(local_output_dir)
 
             cleanup_cmd = f"rm -rf {remote_results_dir} {remote_tar_path}"
@@ -687,7 +687,10 @@ fi
 
             total_time = time.time() - start_download_time
             mins, secs = divmod(int(total_time), 60)
-            print(f"ROSA results downloaded and extracted to: {local_output_dir}")
+            if AssertFlags.get("ASSERT_UNPACK") == True:
+                print(f"ROSA results downloaded and extracted to: {local_output_dir}")
+            else:
+                print(f"ROSA results downloaded to: {local_output_dir}")
             print(f"Remote workspace scrub complete. Total time: {mins}m:{secs}s")
             return True
         finally:

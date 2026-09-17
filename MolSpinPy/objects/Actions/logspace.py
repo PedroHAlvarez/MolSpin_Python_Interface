@@ -21,7 +21,7 @@ class LogSpaceScalar(ActionFunction.ActionFunction):
             state.index += 1
             return val
         return var.value
-    def DoStep(self, var):
+    def DoStep(self, var, action_id=None):
         val = self.LogSpaceScalerLogic(self._step, var, self._state, self.sequence)
         self._step += 1
         #print(val)
@@ -59,7 +59,7 @@ class LogSpaceVector(ActionFunction.ActionFunction):
             val = self._direction.multiply(val)
             return val.value
         return var.value
-    def DoStep(self, var):
+    def DoStep(self, var, action_id=None):
         val = self.LogSpaceVectorLogic(self._step, var, self._state, self.sequence)
         self._step += 1
         #print(val)
@@ -98,7 +98,7 @@ class LogSpaceList(ActionFunction.ActionFunction):
             val = self._direction.multiply(val)
             return val.value
         return var.value
-    def DoStep(self, var):
+    def DoStep(self, var, action_id=None):
         val = self.LogSpaceListLogic(self._step, var, self._state, self.sequence)
         self._step += 1
         #print(val)
