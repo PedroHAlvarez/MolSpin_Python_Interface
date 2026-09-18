@@ -826,3 +826,12 @@ class Project():
         finally:
             hpcssh.close()
 
+    def GenerateParamMap(self,steps):
+        base_state = copy.deepcopy(self._resolved_dict)
+        param_map = {}
+        for i in range (0,steps):
+            params = self.manager.run(i,True)
+            param_map[i] = params
+        self._resolved_dict = base_state
+        return param_map
+
