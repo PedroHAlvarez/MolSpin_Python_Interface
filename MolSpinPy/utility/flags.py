@@ -3,10 +3,11 @@ from typing import TypedDict, Unpack, Any
 from typing_extensions import Annotated, Doc
 class _FlagOptions(TypedDict, total=False):
     ASSERT_BINARY: Annotated[bool, Doc("Enable binary validation checks.")]
-    ASSERT_DEPLOY: Annotated[bool, Doc("Enable deployment validation checks.")]
+    ASSERT_DEPLOY: Annotated[bool, Doc("Enable deployment.")]
     ASSERT_GIT: Annotated[bool, Doc("Enable Git validation and synchronization checks.")]
-    ASSERT_METADATA: Annotated[bool, Doc("Enable project metadata validation checks.")]
+    ASSERT_METADATA: Annotated[bool, Doc("Enable project metadata file creation.")]
     ASSERT_OSW: Annotated[bool, Doc("OSW - Old Staging Workspace. Uses the legacy 'molspin_run_workspace' instead of the new 'molspin_workspace_project_name'.")]
+    ASSERT_UNPACK: Annotated[bool, Doc("Automatically unpacks the tar file downloaded off the HPC")]
 class AssertFlags:
     _INITIAL_FLAGS = {
         "ASSERT_BINARY": True,
@@ -14,7 +15,8 @@ class AssertFlags:
         "ASSERT_GIT": True,
         "ASSERT_METADATA": True,
 
-        "ASSERT_OSW" : False #OSW- OLD STAGING WORKSPACE - INDICATES THAT THE FOLDER WE ARE LOOKING FOR IN THE HPC IS JUST "molspin_run_workspace" AND NOT THE NEW FORMAT.
+        "ASSERT_OSW" : False, #OSW- OLD STAGING WORKSPACE - INDICATES THAT THE FOLDER WE ARE LOOKING FOR IN THE HPC IS JUST "molspin_run_workspace" AND NOT THE NEW FORMAT.
+        "ASSERT_UNPACK" : True
     }
 
     _flags = _INITIAL_FLAGS.copy()

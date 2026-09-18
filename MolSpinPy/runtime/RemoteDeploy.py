@@ -473,7 +473,7 @@ fi
         #print(f"Job {job_id} is complete! Starting download")
         #remote_tar_path = f"{remote_working_dir.rstrip('/')}/workspace_{job_id}.tar"
         #remote_tar_path = f"{remote_working_dir.rstrip('/')}/workspace_$SLURM_ARRAY_JOB_ID.tar"
-        if AssertFlags.get("ASSERT_OSW"):
+        if not AssertFlags.get("ASSERT_OSW"):
             remote_results_dir = f"{remote_working_dir.rstrip('/')}/molspin_workspace_{project_name}"
         else:
             remote_results_dir = f"{remote_working_dir.rstrip('/')}/molspin_run_workspace"
