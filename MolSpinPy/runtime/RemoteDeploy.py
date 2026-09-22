@@ -193,6 +193,7 @@ END_LINE=$((SLURM_ARRAY_TASK_ID * CALCS_PER_NODE))
 MANIFEST_PATH={manifest_name}
 WORKER_PATH={worker_path}
 WORKER_PIDS=()
+RUNNING_PIDS=()
 
 for (( line_idx=$START_LINE; line_idx<=$END_LINE; line_idx++ )); do
     if [ $line_idx -gt {total_tasks} ]; then
@@ -200,7 +201,18 @@ for (( line_idx=$START_LINE; line_idx<=$END_LINE; line_idx++ )); do
         break
     fi
 
-    while [ $(jobs -rp | wc -l) -ge $MAX_CONCURRENT ]; do
+    while true; do
+        ACTIVE=()
+        for pid in "${{RUNNING_PIDS[@]}}"; do
+            if kill -0 "$pid" 2>/dev/null; then
+                ACTIVE+=("$pid")
+            fi
+        done
+        RUNNING_PIDS=("${{ACTIVE[@]}}")
+
+        if [ ${{#RUNNING_PIDS[@]}} -lt $MAX_CONCURRENT ]; then
+            break
+        fi
         sleep 1
     done
 
@@ -210,7 +222,9 @@ for (( line_idx=$START_LINE; line_idx<=$END_LINE; line_idx++ )); do
         "{remote_results_dir}" \
         "{remote_logs_dir}" \
         "{remote_binary_path}" &
-    WORKER_PIDS+=("$!")
+    PID=$!
+    WORKER_PIDS+=("$PID")
+    RUNNING_PIDS+=("$PID")
 done
 
 WORKER_FAILURE = 0
