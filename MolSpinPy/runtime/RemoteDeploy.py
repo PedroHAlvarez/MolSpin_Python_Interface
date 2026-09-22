@@ -192,6 +192,7 @@ END_LINE=$((SLURM_ARRAY_TASK_ID * CALCS_PER_NODE))
 
 MANIFEST_PATH={manifest_name}
 WORKER_PATH={worker_path}
+WORKER_PIDS=()
 
 for (( line_idx=$START_LINE; line_idx<=$END_LINE; line_idx++ )); do
     if [ $line_idx -gt {total_tasks} ]; then
@@ -209,33 +210,10 @@ for (( line_idx=$START_LINE; line_idx<=$END_LINE; line_idx++ )); do
         "{remote_results_dir}" \
         "{remote_logs_dir}" \
         "{remote_binary_path}" &
-done
-wait 
-
-echo "Array node $SLURM_ARRAY_TASK_ID computations done"
-"""
-
-        if self.cluster_profile == "rosa":
-            worker_path_marker = f"WORKER_PATH={worker_path}\n\nfor (( line_idx="
-            if worker_path_marker not in job_script:
-                raise RuntimeError("Unable to install ROSA worker status guard: worker loop marker not found.")
-            job_script = job_script.replace(
-                worker_path_marker,
-                f"WORKER_PATH={worker_path}\nWORKER_PIDS=()\n\nfor (( line_idx=",
-                1,
-            )
-
-            legacy_wait_block = (
-                f'        "{remote_binary_path}" &\n'
-                'done\n'
-                'wait \n'
-                '\n'
-                'echo "Array node $SLURM_ARRAY_TASK_ID computations done"'
-            )
-            rosa_wait_block = f'''        "{remote_binary_path}" &
     WORKER_PIDS+=("$!")
 done
 
+WORKER_FAILURE = 0
 WORKER_FAILURE=0
 for worker_pid in "${{WORKER_PIDS[@]}}"; do
     if ! wait "$worker_pid"; then
@@ -249,10 +227,8 @@ if [ "$WORKER_FAILURE" -ne 0 ]; then
     exit 1
 fi
 
-echo "Array node $SLURM_ARRAY_TASK_ID computations done"'''
-            if legacy_wait_block not in job_script:
-                raise RuntimeError("Unable to install ROSA worker status guard: wait block marker not found.")
-            job_script = job_script.replace(legacy_wait_block, rosa_wait_block, 1)
+echo "Array node $SLURM_ARRAY_TASK_ID computations done"
+"""
         
         epilogue_script = rf"""#!/bin/bash
 #SBATCH --job-name=molspin_python_{project_name}_tarball
