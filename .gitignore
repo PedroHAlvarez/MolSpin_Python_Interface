@@ -19,3 +19,4 @@ resonance_frequency_scan.py
 *.md
 *.egg-info
 *.txt
+*pkl

@@ -227,7 +227,6 @@ for (( line_idx=$START_LINE; line_idx<=$END_LINE; line_idx++ )); do
     RUNNING_PIDS+=("$PID")
 done
 
-WORKER_FAILURE = 0
 WORKER_FAILURE=0
 for worker_pid in "${{WORKER_PIDS[@]}}"; do
     if ! wait "$worker_pid"; then
