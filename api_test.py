@@ -145,12 +145,48 @@ def StrainPL():
     project.Deploy(NPZ=True, max_processes=20)
 
 def test():
-    dat = MolSpinPy.msd.MsdHandling.ConvertMSDtoDictionary("base_inputfile.msd")
+    dat = MolSpinPy.msd.MsdHandling.ConvertMSDtoDictionary("MagLOV.msd")
     _template = MolSpinPy.msd.FileTemplate.get_template("BasicTemplate.msd")
     _template.render_to_file(dat, "output.msd")
     print(dat)
+
+def test2():
+    #build a radical pair
+    from MolSpinPy.objects.spin_object import Electron, Nucleus
+    from MolSpinPy.objects.spin_system import SpinSystem
+    from MolSpinPy.objects.interactions import Zeeman_Interaction, Hyperfine_Interaction, Dipolar_Interaction
+
+    radical_pair = SpinSystem("radical_pair")
+    e1 = Electron("e1")
+    e2 = Electron("e2")
+    radical_pair.add_electron(e1)
+    radical_pair.add_electron(e2)
+    n1 = Nucleus("n1")
+    n1.spin = 1/2
+    radical_pair.add_nucleus(n1)
+    zeeman = Zeeman_Interaction("zeeman", [e1,e2], field=MolSpinPy.maths.vector.Vector("0.0 0.0 0.1"))
+    hyperfine = Hyperfine_Interaction("hyperfine", spin1=e1, spin2=n1, tensor=MolSpinPy.maths.Isotropic("0.01"))
+    dipolar = Dipolar_Interaction("dipolar", spin1=e1,spin2=e2, tensor=MolSpinPy.maths.tensor.Anisotropic("-0.01,-0.01,0.02"))
+    radical_pair.add_interaction(zeeman)
+    radical_pair.add_interaction(hyperfine)
+    radical_pair.add_interaction(dipolar)
+    test_dict = radical_pair.ConvertToDictionary()
+    print(test_dict)
+
+    test_dict = {
+        "spinsystems": {
+            "radical_pair": test_dict
+        }
+    }
+
+    #render to msd file
+    _template = MolSpinPy.msd.FileTemplate.get_template("BasicTemplate.msd")
+    _template.render_to_file(test_dict, "radical_pair_test.msd")
+
+
 
 
 #StrainT1times()
 #StrainPL()
 test()
+test2()

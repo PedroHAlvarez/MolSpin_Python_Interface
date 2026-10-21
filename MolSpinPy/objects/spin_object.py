@@ -17,9 +17,52 @@ class SpinObject:
         self.physical = True #useful for something like a Schulten-Wolynes interaction 
         #self.s_value = 0.0
         #self.g_tensor = tensor.Isotropic("0")
+        self.spin_map = self.index_mapping
 
     def set_physical(self, is_physical): 
         self.physical = is_physical 
+
+    @property
+    def index_mapping(self):
+        s = getattr(self, 's_value', 0.5)
+        m_values = []
+        curr = s
+        while curr >= -s:
+            m_values.append(curr)
+            curr -= 1.0
+        mapping = {}
+        #mapping goes from -m to +m, so that the first index is -m and the last index is +m, this is also the case for non integer spins, e.g. 1/2, 3/2, etc.
+        spin_type = 0 #0 for half integer, 1 for integer
+        if m_values % 2 == 0:
+            spin_type = 0
+        else:
+            spin_type = 1
+        max_map = 0
+        min_map = 0
+        if spin_type == 0:
+            max_map = int(len(m_values) / 2)
+            min_map = -max_map
+        else:
+            max_map = int((len(m_values) - 1) / 2)
+            min_map = -max_map
+
+        #now we can create the mapping
+        for i in range(len(m_values)):
+            index = max_map - i
+            mapping[index] = m_values[i]
+
+        return mapping
+
+    def resolve_index(self, index):
+        """Resolves a user-passed index to its corresponding magnetic quantum number."""
+        mapping = self.index_mapping
+        if index in mapping:
+            return mapping[index]
+        raise ValueError(
+            f"Invalid index {index} for spin '{self.name}' (s = {self._s_value}). "
+            f"Allowed indices are: {list(mapping.keys())}"
+        )
+
 
     def render_to_string(self):
         """Should be implemented by derived classes"""
@@ -33,7 +76,7 @@ class Electron(SpinObject):
         SpinObject.__init__(self, name)
         self.type = SpinObjectType.Electron
         self._s_value = 1.0/2.0
-        self._g_tensor = tensor.Isotropic("2.023")
+        self._g_tensor = tensor.Isotropic("2.0023")
 
     @property
     def spin(self):
@@ -59,6 +102,7 @@ class Electron(SpinObject):
         if s_value_float % 0.5 != 0:
             raise ValueError("Electron spin value must be a multiple of 1/2")
         self._s_value = s_value_float
+        self.spin_map = self.index_mapping
     
     def render_to_string(self):
         return f"spin(electron, {self._s_value}, {self._g_tensor.render_to_string()})"
@@ -105,6 +149,7 @@ class Nucleus(SpinObject):
         if s_value_float % 0.5 != 0:
             raise ValueError("Nuclear spin value must be a multiple of 1/2")
         self._s_value = s_value_float
+        self.spin_map = self.index_mapping
     
     def render_to_string(self):
         return f"spin(nucleus, {self._s_value}, {self._g_tensor.render_to_string()})"

@@ -248,7 +248,7 @@ echo "Array node $SLURM_ARRAY_TASK_ID computations done"
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --partition={partition}
-#SBATCH --time={walltime}
+#SBATCH --time=12:00:00
 #SBATCH --output={remote_logs_dir}/epi_%j.out
 #SBATCH --error={remote_logs_dir}/epi_%j.err
 
