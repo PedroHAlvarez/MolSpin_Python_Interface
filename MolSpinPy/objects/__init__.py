@@ -16,5 +16,6 @@ from . import Actions
 #from . import property_object
 #from . import pulse_object
 
-#interactions 
 from . import interactions
+from .states import State
+from .transitions import Transition

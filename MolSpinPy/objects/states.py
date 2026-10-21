@@ -19,20 +19,19 @@ class State:
         For raw text expressions, use State.from_text(name, text_expr).
         """
         self.name = name
-        if isinstance(definition, str):
-            return self.from_text(name, definition)
-        else:
-            self.definition = self._parse_definition(definition)
+        self._definition = self._parse_definition(definition)
 
     def _parse_definition(self, definition):
-        if isinstance(definition, dict):
+        if isinstance(definition, str):
+            return definition
+        elif isinstance(definition, dict):
             # 1. Product state via spin-to-index dictionary
             parts = []
             for spin_obj, index in definition.items():
                 spin_name = spin_obj.name if hasattr(spin_obj, 'name') else str(spin_obj)
                 m_val = spin_obj.resolve_index(index)
                 parts.append(f"spin({spin_name}) = |{m_val}>")
-            return "; ".join(parts) + (";" if parts else "")
+            return "; ".join(parts)# + (";" if parts else "")
         elif isinstance(definition, (list, tuple)) and len(definition) == 2 and isinstance(definition[0], (list, tuple)):
         # 2. Entangled / joint state via index arrays: ([spin1, spin2, ...], terms)
             spins_list, terms = definition
@@ -59,7 +58,7 @@ class State:
                 term_strings.append(term_str)
 
             expr = "".join(term_strings)
-            return f"spins({spins_str}) = {expr};"
+            return f"spins({spins_str}) = {expr}"
     
         elif isinstance(definition, str):
             return definition
@@ -80,11 +79,30 @@ class State:
             return f"State {self.name} {{}}"
         return f"State {self.name} {{ {self._definition} }}"
 
+    def split_definition(self):
+        """
+        Splits the definition string into multiple componentns based on semi colons
+        and splits each component into a key-value pair based on the first '=' sign.
+        """
+
+        components = [comp.strip() for comp in self._definition.split(";") if comp.strip()]
+        split_components = []
+        for comp in components:
+            if '=' in comp:
+                key, value = comp.split("=", 1)
+                split_components.append((key.strip(), value.strip()))
+            else:
+                split_components.append((None, comp))
+        return split_components
+
     def ConvertToDictionary(self):
-        dict_data = {
-            "type": "state",
-            "definition": self._definition
-        }
+        state_components = self.split_definition()
+        dict_data = {}
+        for key, value in state_components:
+            if key is not None:
+                dict_data[key] = value
+            else:
+                dict_data[f"component_{len(dict_data)+1}"] = value
         return self.name, dict_data
 
     @classmethod

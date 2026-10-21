@@ -162,7 +162,7 @@ def test2():
     radical_pair.add_electron(e1)
     radical_pair.add_electron(e2)
     n1 = Nucleus("n1")
-    n1.spin = 1/2
+    n1.spin = 1
     radical_pair.add_nucleus(n1)
     zeeman = Zeeman_Interaction("zeeman", [e1,e2], field=MolSpinPy.maths.vector.Vector("0.0 0.0 0.1"))
     hyperfine = Hyperfine_Interaction("hyperfine", spin1=e1, spin2=n1, tensor=MolSpinPy.maths.Isotropic("0.01"))
@@ -170,12 +170,22 @@ def test2():
     radical_pair.add_interaction(zeeman)
     radical_pair.add_interaction(hyperfine)
     radical_pair.add_interaction(dipolar)
-    test_dict = radical_pair.ConvertToDictionary()
-    print(test_dict)
+
+
+    t0 = radical_pair.add_state(MolSpinPy.objects.State("T0", definition=([e1,e2], [(1, [1, -1]), (1, [-1, 1])])))
+    tp = radical_pair.add_state(MolSpinPy.objects.State("T+", definition=([e1,e2], [(1, [1, 1])])))
+    tm = radical_pair.add_state(MolSpinPy.objects.State("T-", definition=([e1,e2], [(1, [-1, -1])])))
+    s = radical_pair.add_state(MolSpinPy.objects.State("S", definition=([e1,e2], [(1, [1, -1]), (-1, [-1, 1])])))
+
+    #n1u = radical_pair.add_state(MolSpinPy.objects.State("n1u", definition={n1: 1}))
+    radical_pair.add_transition(MolSpinPy.objects.Transition(name="test",source=t0, targetstate=tp, rate=0.01,include_all_nuclear=True))
+
+    ss_name, test_dict_rp = radical_pair.ConvertToDictionary()
+    print(test_dict_rp)
 
     test_dict = {
         "spinsystems": {
-            "radical_pair": test_dict
+            ss_name: test_dict_rp 
         }
     }
 

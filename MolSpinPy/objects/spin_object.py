@@ -24,7 +24,7 @@ class SpinObject:
 
     @property
     def index_mapping(self):
-        s = getattr(self, 's_value', 0.5)
+        s = getattr(self, '_s_value', 0.5)
         m_values = []
         curr = s
         while curr >= -s:
@@ -33,7 +33,7 @@ class SpinObject:
         mapping = {}
         #mapping goes from -m to +m, so that the first index is -m and the last index is +m, this is also the case for non integer spins, e.g. 1/2, 3/2, etc.
         spin_type = 0 #0 for half integer, 1 for integer
-        if m_values % 2 == 0:
+        if len(m_values) % 2 == 0:
             spin_type = 0
         else:
             spin_type = 1
@@ -49,6 +49,8 @@ class SpinObject:
         #now we can create the mapping
         for i in range(len(m_values)):
             index = max_map - i
+            if spin_type == 0 and index == 0:
+                index = -1
             mapping[index] = m_values[i]
 
         return mapping
