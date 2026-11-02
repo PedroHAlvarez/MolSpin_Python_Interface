@@ -243,13 +243,18 @@ fi
             if post_step is not None:
                 post_step()
 
-            snapshot = copy.deepcopy(resolved_dict)
-            snapshot['settings']['general']['steps'] = 1
-
-            for val, key in enumerate(resolved_dict['tasks']):
-                base_output_name = f"./{project_name}-{key}-{i}"
-                snapshot['tasks'][key]['logfile'] = f"{base_output_name}.log"
-                snapshot['tasks'][key]['datafile'] = f"{base_output_name}.dat"
+            # Only the keys that differ per step are copied; everything else is shared
+            # because rendering never mutates the context.
+            snapshot = dict(resolved_dict)
+            general = dict(snapshot['settings'])
+            general['general'] = {**general['general'], 'steps': 1}
+            snapshot['settings'] = general
+            snapshot['tasks'] = {
+                key: {**task,
+                      'logfile': f"./{project_name}-{key}-{i}.log",
+                      'datafile': f"./{project_name}-{key}-{i}.dat"}
+                for key, task in resolved_dict['tasks'].items()
+            }
 
             filename = f"{project_name}_{start_id + i}.msd"
             msd_filenames.append(filename)

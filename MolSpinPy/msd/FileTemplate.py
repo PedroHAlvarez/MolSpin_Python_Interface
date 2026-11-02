@@ -6,6 +6,8 @@ from importlib import resources
 
 from . import nodes
 
+_BLANK_LINES = re.compile(r'^\s*$\n', flags=re.MULTILINE)
+
 class FileTemplate:
     def __init__ (self, *, name):
         self.template_path = name
@@ -19,7 +21,7 @@ class FileTemplate:
             context["__case_map"] = getattr(self, 'case_map', {})
         try:
             raw = "".join([node.render(context) for node in self.node_tree])
-            return re.sub(r'^\s*$\n', '', raw, flags=re.MULTILINE)
+            return _BLANK_LINES.sub('', raw)
         finally:
             if not case_map_exists:
                 context.pop("__case_map", None)

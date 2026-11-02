@@ -14,36 +14,40 @@ class TextNode(Node):
         Node.__init__(self)
         self.text = text
     def render(self, context = None):
-        case_map = context.get("__case_map", {})
-        display_name = case_map.get(self.text.lower(), self.text)
-        return display_name
+        case_map = context.get("__case_map")
+        if not case_map:
+            return self.text
+        return case_map.get(self.text.lower(), self.text)
 
 class VarNode(Node):
     def __init__(self, var_name):
         Node.__init__(self)
         self.var_name = var_name
+        self.parts = var_name.split(".")
         self.regex_check = [regex_functions._match_vector, regex_functions._internal_brackets]
     def render(self, context):
         val = context
-        case_map = context.get("__case_map", {})
-        for part in self.var_name.split("."):
+        case_map = context.get("__case_map") or {}
+        for part in self.parts:
             if isinstance(val, dict):
                 val = val.get(part, "")
             else:
                 return f"MISSING_VAR:{self.var_name}"
         
         if isinstance(val, str):
-            prev_val = val
-            for fn in self.regex_check:
-                val = fn(val)
-                if val == prev_val:
-                    continue
-                else:
-                    return str(val)
+            # Both checks only ever alter strings containing one of these markers.
+            if "[" in val or "matrix" in val or "anisotropic" in val:
+                prev_val = val
+                for fn in self.regex_check:
+                    val = fn(val)
+                    if val != prev_val:
+                        return str(val)
         if isinstance(val, str) and ' ' in val and not ',' in val:
             if not ('(' in val or '|' in val or '<' in val or '>' in val):
                 if not (val.startswith('"') and val.endswith('"')):
                     val = f'"{val}"'
+        if not case_map:
+            return str(val)
         display_val = case_map.get(str(val).lower(), str(val))         
         return display_val
 class LoopNode(Node):
@@ -65,15 +69,21 @@ class LoopNode(Node):
             elif not isinstance(iterable_dat, list):
                 return f"MISSING_VAR:{self.data_path}"
         results = []
+        append = results.append
+        body = self.loop_body
+        two_vars = len(self.loop_var) == 2
+        v0 = self.loop_var[0]
+        v1 = self.loop_var[1] if two_vars else None
+        # One scratch context is reused; children never retain a reference to it.
+        local_context = context.copy()
         for item in iterable_dat:
-            local_context = context.copy()
-            if len(self.loop_var) == 2:
-                local_context[self.loop_var[0]] = item[0]
-                local_context[self.loop_var[1]] = item[1]
+            if two_vars:
+                local_context[v0] = item[0]
+                local_context[v1] = item[1]
             else:
-                local_context[self.loop_var[0]] = item
-            for child in self.loop_body:
-                results.append(child.render(local_context))
+                local_context[v0] = item
+            for child in body:
+                append(child.render(local_context))
         return "".join(results)
     def resolve_path(self, path, context):
         val = context
@@ -89,7 +99,10 @@ class LoopNode(Node):
             print(child)
         return ""
     
+_PATH_PATTERN = re.compile(r'\b(?!(?:and|or|not|xor)\b)[a-zA-Z_][\w\.]*\b')
+
 class IfNode(Node):
+    _expr_cache = {}
     def __init__ (self):
         Node.__init__(self)
         self.branches = []
@@ -101,8 +114,10 @@ class IfNode(Node):
                 return "".join(child.render(context) for child in body)
         return ""
     def evaluate_condition(self, condition, context):
-        expr = condition.replace("if ", "").replace("elif ", "").strip()
-        path_pattern = r'\b(?!(?:and|or|not|xor)\b)[a-zA-Z_][\w\.]*\b'
+        expr = self._expr_cache.get(condition)
+        if expr is None:
+            expr = condition.replace("if ", "").replace("elif ", "").strip()
+            self._expr_cache[condition] = expr
         def resolve_path(match):
             path = match.group(0)
             val = context
@@ -113,7 +128,7 @@ class IfNode(Node):
                     val = None
                     break
             return "True" if self.is_truthy(val) else "False"
-        processed_expr = re.sub(path_pattern,resolve_path,expr)
+        processed_expr = _PATH_PATTERN.sub(resolve_path,expr)
         processed_expr = processed_expr.replace(" xor ", " ^ ")
         try:
             return eval(processed_expr, {"__builtins__": None},{})
