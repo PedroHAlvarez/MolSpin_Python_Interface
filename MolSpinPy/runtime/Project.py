@@ -7,6 +7,7 @@ from ..msd import FileTemplate , MsdHandling, MSDWriter, ProcessSingleFile
 from .RemoteDeploy import RemoteHpcOrchestrator
 from .Metadata import ProjectMetadata
 from ..utility import AssertFlags
+from ..objects import object_spec
 
 import enum
 import copy
@@ -33,7 +34,10 @@ class Project():
         
         self._manager = None
         self._hpc = None
-        self._settings = {} #will be upgraded to a class in future versions 
+        self._settings = {} #general settings as a plain dict
+        self._spin_systems = {}
+        self._settings_obj = None
+        self._tasks = {}
         self._template = FileTemplate.get_template(template_structure)
         self._dict_template = FileTemplate._init_input_data()
         self._executable_path = None
@@ -118,6 +122,57 @@ class Project():
                 base[key] = value
         return base
             
+    def add_spin_system(self, spin_system):
+        self._spin_systems[spin_system.name] = spin_system
+        self._sync_dict()
+        return spin_system
+
+    def set_settings(self, settings):
+        self._settings_obj = settings
+        self._sync_dict()
+        return settings
+
+    def add_task(self, task):
+        self._tasks[task.name] = task
+        self._sync_dict()
+        return task
+
+    def _sync_dict(self):
+        """Write the object-built spin systems, settings and tasks into the project dictionary."""
+        if not self._base_dict:
+            self._base_dict = FileTemplate._init_input_data()
+        for section in ('spinsystems', 'settings', 'tasks'):
+            self._base_dict.setdefault(section, {})
+        for name, system in self._spin_systems.items():
+            ss_name, ss_dict = system.ConvertToDictionary()
+            self._base_dict['spinsystems'][ss_name] = ss_dict
+        if self._settings_obj is not None:
+            s_name, s_dict = self._settings_obj.ConvertToDictionary()
+            self._base_dict['settings'] = {s_name: s_dict}
+            self._settings = s_dict
+        for task in self._tasks.values():
+            t_name, t_dict = task.ConvertToDictionary()
+            self._base_dict['tasks'][t_name] = t_dict
+
+    def _sync_object_systems(self):
+        """Regenerate the dictionary of every spin system driven by object-bound actions.
+
+        Object-bound actions change the objects, not the dictionary, so the dictionary has to be
+        rebuilt after each step. Dictionary-bound actions on these systems would be overwritten.
+        """
+        if self._manager is None or not self._spin_systems:
+            return
+        driven = set()
+        for action in self._manager._actions:
+            instance = getattr(action.ptr, "instance", None)
+            location = object_spec.locate_object(self._spin_systems, instance) if instance is not None else None
+            if location:
+                driven.add(location[0])
+        for system_name in driven:
+            ss_name, ss_dict = self._spin_systems[system_name].ConvertToDictionary()
+            target = self._resolved_dict if self._resolved_dict else self._base_dict
+            target['spinsystems'][ss_name] = ss_dict
+
     def attach_ActionManager(self, manager : ActionManager):
         self._manager = manager
     def _extract_settings(self):
@@ -479,8 +534,12 @@ class Project():
             workers.append(t)
 
         print(f"Deploying Project {self._name} : Creating {steps} MSD files")
+        initial_input = copy.deepcopy(self._resolved_dict)  # before actions mutate it
+        metadata = ProjectMetadata(self.name, self._template, initial_input, self._manager, self._settings,
+                                   spin_systems=self._spin_systems)
         for i in range(steps):
             self.manager.run(i)
+            self._sync_object_systems()
 
             #very temp code 
             for val,key in enumerate(self._resolved_dict['tasks']):
@@ -515,13 +574,7 @@ class Project():
             raise IOError("Deployment verification failed! Data on disk is incomplete or corrupted.")
 
         if AssertFlags.get("ASSERT_METADATA"):
-            ProjectMetadata(
-                self.name,
-                self._template,
-                self._base_dict,
-                self._manager,
-                self._settings,
-            ).write(output_dir, steps=steps, execution_mode="local")
+            metadata.write(output_dir, steps=steps, execution_mode="local")
         else:
             print("Skipping metadata generation due to ASSERT_METADATA=False")
 
@@ -585,6 +638,8 @@ class Project():
             calcs_per_node=kwargs.pop('max_concurrent', 20),
             max_nodes=kwargs.pop('max_nodes', 10),
             template=self._template,
+            post_step=self._sync_object_systems,
+            spin_systems=self._spin_systems,
             **kwargs
         )
         return job_id

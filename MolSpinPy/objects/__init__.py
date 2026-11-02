@@ -19,3 +19,5 @@ from . import Actions
 from . import interactions
 from .states import State
 from .transitions import Transition
+from .settings import Settings
+from .task import Task

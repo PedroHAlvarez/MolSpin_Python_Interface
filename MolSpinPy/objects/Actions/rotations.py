@@ -24,7 +24,7 @@ class FibonacciSphere(ActionFunction.ActionFunction):
     def FibonacciSphereLogic(self, step, var, state, points):
         index = step % len(points)
         return points[index]
-    def DoStep(self, var):
+    def DoStep(self, var, action_id=None):
         val = self.FibonacciSphereLogic(self._step, var, self._state, self.points)
         self._step += 1
         return val
@@ -90,7 +90,7 @@ class RotateVector(ActionFunction.ActionFunction):
             raise ValueError(f"Variable to rotate has to be a 3D vector")
         rotated_v = np.dot(self._R, v)
         return rotated_v
-    def DoStep(self, var):
+    def DoStep(self, var, action_id=None):
         val = self.RotateVectorLogic(self._step, var, self._state, self._param['angle'])
         self._step += 1
         return val

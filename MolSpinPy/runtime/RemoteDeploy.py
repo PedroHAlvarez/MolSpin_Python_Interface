@@ -232,10 +232,16 @@ fi
         #os.remove(metadata_markdown)
 
         start_id = 0
+        initial_input = copy.deepcopy(resolved_dict)  # before actions mutate it
+        metadata = ProjectMetadata(project_name, base_template, initial_input, manager, initial_input.get('settings', {}),
+                                   spin_systems=kwargs.get('spin_systems'))
+        post_step = kwargs.get('post_step')
         msd_filenames = []
         compressor = MsdHandling.SequentialSweepCompressor()
         for i in range(steps):
             manager.run(i)
+            if post_step is not None:
+                post_step()
 
             snapshot = copy.deepcopy(resolved_dict)
             snapshot['settings']['general']['steps'] = 1
@@ -266,13 +272,6 @@ fi
             f.write("\n".join(msd_filenames) + "\n")
 
         if AssertFlags.get("ASSERT_METADATA"):
-            metadata = ProjectMetadata(
-                project_name,
-                base_template,
-                resolved_dict,
-                manager,
-                resolved_dict.get('settings', {}),
-            )
             metadata_extra = {
                 "remote_working_dir": remote_working_dir,
                 "partition": partition,

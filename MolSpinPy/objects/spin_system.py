@@ -113,7 +113,7 @@ class SpinSystem:
                     new_tr = transitions.Transition(
                         name=expanded_name,
                         source=expanded_source,
-                        rate=tr.rate,
+                        rate=tr._rate,
                         targetsystem=tr.targetsystem,
                         targetstate=expanded_target
                     )
