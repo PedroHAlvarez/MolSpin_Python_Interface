@@ -56,6 +56,26 @@ def _ReadFile(filename, **kwargs):
             lines.append(line.decode('utf-8').split())
         return lines
 
+def _LinesToColumns(lines):
+    header_names = lines[0]
+    data_rows = np.array(lines[1:])
+    columns = {'_group_map': data_rows[:,0]}
+    for i,name in enumerate(header_names):
+        if i == 0: continue
+        col_data = data_rows[:,i]
+        try:
+            columns[name] = col_data.astype(float)
+        except ValueError:
+            columns[name] = col_data
+    return columns
+
+def LoadResultColumns(filename):
+    """Read a MolSpin .dat (or the .npz made from one) into a dict of column name -> array."""
+    if filename.endswith(".npz"):
+        with np.load(filename, allow_pickle=False) as loaded:
+            return {key: loaded[key] for key in loaded.files}
+    return _LinesToColumns(_ReadFile(filename, silent=True))
+
 def _SaveToNPZ(lines, filename, **kwargs):
     silent = kwargs.get("silent", False)
     header_names = lines[0]

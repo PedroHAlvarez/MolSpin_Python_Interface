@@ -3,7 +3,7 @@
 from asyncio import threads
 
 from . import ActionManager
-from ..msd import FileTemplate , MsdHandling, MSDWriter, ProcessSingleFile
+from ..msd import FileTemplate , MsdHandling, MSDWriter, ProcessSingleFile, LoadResultColumns
 from .RemoteDeploy import RemoteHpcOrchestrator
 from .Metadata import ProjectMetadata
 from ..utility import AssertFlags
@@ -280,12 +280,11 @@ class Project():
         print("Pass Deploy(molspin='/path/to/MolSpin'), set MOLSPIN_PATH, or add molspin to PATH.")
         return None
 
-    def VerifyIntegrity(self, output_dir, expected_steps, file_prefix):
+    def VerifyIntegrity(self, output_dir, expected_steps, file_prefix, start_id = 0):
         print(f"\n--- Verifying file creation for '{output_dir}' ---")
         files_to_check = []
         sample_rate = 100
         max_workers = 20
-        start_id = 0
         for i in range(expected_steps):
             if i % sample_rate == 0 or i == (expected_steps - 1):
                 current_id = start_id + i
@@ -373,7 +372,7 @@ class Project():
 
 
 
-    def RunMolSpinDeploymentLocal(self, output_dir, parallel = True, max_workers = 20, NPZ = False):
+    def RunMolSpinDeploymentLocal(self, output_dir, parallel = True, max_workers = 20, NPZ = False, files = None):
         print(f"\n-----Starting MolSpin Execution-----")
         if not self._executable_path or not os.path.exists(self._executable_path):
             raise FileNotFoundError(
@@ -390,7 +389,7 @@ class Project():
         msd_files = [
             os.path.join(output_dir, f) for f in os.listdir(output_dir) 
             if f.endswith(".msd") and "_INITIAL" not in f
-        ]
+        ] if files is None else list(files)
         msd_files.sort()
 
         if not msd_files:
@@ -537,7 +536,7 @@ class Project():
         initial_input = copy.deepcopy(self._resolved_dict)  # before actions mutate it
         metadata = ProjectMetadata(self.name, self._template, initial_input, self._manager, self._settings,
                                    spin_systems=self._spin_systems)
-        for i in range(steps):
+        def generate_step(i):
             self.manager.run(i)
             self._sync_object_systems()
 
@@ -562,6 +561,22 @@ class Project():
 
             if io_queue:
                 io_queue.put((i, snapshot))
+
+        if self.manager.has_feedback:
+            if not AssertFlags.get("ASSERT_DEPLOY", True):
+                raise RuntimeError("Feedback actions need real results, so ASSERT_DEPLOY cannot be disabled.")
+            total_steps = self._run_feedback_generations(
+                generate_step, io_queue, workers, output_dir, npz, max_processes, metadata,
+                batch=int(kwargs.get('batch', steps)),
+                max_generations=int(kwargs.get('max_generations', 10)),
+                max_steps=kwargs.get('max_steps', None),
+            )
+            if not npz:
+                return [f"outputs/{output_dir}",f"outputs/{output_dir}/molspin_results"]
+            return [f"outputs/{output_dir}",f"outputs/{output_dir}/molspin_npz"]
+
+        for i in range(steps):
+            generate_step(i)
         if io_queue:
             print("Simulation steps complete. Finalizing background disk writes...")
             for i in range(num_workers):
@@ -596,7 +611,85 @@ class Project():
         else:
             return [f"outputs/{output_dir}",f"outputs/{output_dir}/molspin_npz"]
 
+    def _assert_no_feedback(self):
+        if self._manager is not None and self._manager.has_feedback:
+            raise RuntimeError(
+                "Feedback actions are only supported for local deployment: the HPC workflow cannot "
+                "tell when an experiment has finished."
+            )
+
+    def _collect_generation_results(self, output_dir, first_step, size, npz):
+        """Load every task's output for one generation as {index: {task: {column: array}}}."""
+        task_names = list(self._resolved_dict['tasks'])
+        results = {}
+        for index in range(size):
+            step = first_step + index
+            per_task = {}
+            for task in task_names:
+                base = os.path.join(output_dir, "molspin_results", f"{self._name}-{task}-{step}.dat")
+                path = base
+                if npz:
+                    path = os.path.join(output_dir, "molspin_npz", f"{self._name}-{task}-{step}.dat.npz")
+                if os.path.exists(path):
+                    per_task[task] = LoadResultColumns(path)
+            results[index] = per_task
+        return results
+
+    def _run_feedback_generations(self, generate_step, io_queue, workers, output_dir, npz, max_processes,
+                                  metadata, batch, max_generations, max_steps):
+        feedback = self.manager.feedback_action.func
+        total = 0
+        generation = 0
+        stop_reason = "max_generations"
+        try:
+            while True:
+                print(f"\n=== Generation {generation}: {batch} experiments (steps {total}-{total + batch - 1}) ===")
+                for index in range(batch):
+                    self.manager.set_context(index, generation)
+                    generate_step(total + index)
+                io_queue.join()
+                if not self.VerifyIntegrity(output_dir, batch, self._name, start_id=total):
+                    raise IOError("Deployment verification failed! Data on disk is incomplete or corrupted.")
+
+                files = [os.path.join(output_dir, f"{self._name}_{total + k}.msd") for k in range(batch)]
+                if not self.RunMolSpinDeploymentLocal(output_dir=output_dir, parallel=True,
+                                                      max_workers=max_processes, NPZ=npz, files=files):
+                    raise RuntimeError("Deployment pipeline halted: Anomalies caught during MolSpin processing execution.")
+
+                results = self._collect_generation_results(output_dir, total, batch, npz)
+                next_batch, stopped = feedback.Feedback(results, generation, batch)
+                feedback._generation_log.append({
+                    "generation": generation, "first_step": total, "size": batch,
+                    "next_batch": next_batch, "stopped": stopped,
+                })
+                total += batch
+                generation += 1
+
+                if stopped:
+                    stop_reason = "stop() called"
+                elif next_batch == 0:
+                    stop_reason = "empty next batch"
+                elif generation >= max_generations:
+                    stop_reason = "max_generations"
+                elif max_steps is not None and total + next_batch > max_steps:
+                    stop_reason = "max_steps"
+                else:
+                    batch = next_batch
+                    continue
+                break
+        finally:
+            for _ in workers:
+                io_queue.put(None)
+            for t in workers:
+                t.join()
+        print(f"\nFeedback loop finished after {generation} generations ({total} experiments): {stop_reason}")
+        if AssertFlags.get("ASSERT_METADATA"):
+            metadata.write(output_dir, steps=total, execution_mode="local",
+                           extra={"feedback": {"generations": generation, "stop_reason": stop_reason}})
+        return total
+
     def LoadHPC(self, hpc_username, hpc_host, hpc_key_path, remote_working_dir, **kwargs):
+        self._assert_no_feedback()
         if self._hpc == None:
             cluster_profile = kwargs.pop('cluster_profile', 'gwdg')
             self._hpc = RemoteHpcOrchestrator(
@@ -609,6 +702,7 @@ class Project():
             self._hpc.remote_working_dir = remote_working_dir
         
     def SubmitToHPC(self, hpc_username, hpc_host, hpc_key_path, remote_binary_path, remote_working_dir, **kwargs):
+        self._assert_no_feedback()
         if self._hpc == None:
             cluster_profile = kwargs.pop('cluster_profile', 'gwdg')
             self._hpc = RemoteHpcOrchestrator(

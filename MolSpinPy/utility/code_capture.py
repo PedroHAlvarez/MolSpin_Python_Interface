@@ -227,7 +227,16 @@ class _Collector:
         else:
             global_ns = vars(sys.modules[obj.__module__])
             closure = {}
+        decorator_names = {
+            n.id
+            for decorator in getattr(tree.body[0], "decorator_list", [])
+            for n in ast.walk(decorator)
+            if isinstance(n, ast.Name)
+        }
         for name in _referenced_names(tree, obj.__name__):
+            value = closure[name] if name in closure else global_ns.get(name)
+            if name in decorator_names and getattr(type(value), "requires_results", False):
+                continue  # e.g. @feedback_fn.on_generation: registers the hook, not part of its behaviour
             if name in closure:
                 self.add(name, closure[name], obj)
             elif name in global_ns:

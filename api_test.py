@@ -1,6 +1,7 @@
-import MolSpinPy
+﻿import MolSpinPy
 import json
 import os
+import shutil
 import numpy as np
 
 def main():
@@ -866,6 +867,113 @@ def lambda_free_recursive_action(step, var):
     return 1.0 if _is_even(step) else 0.0
 
 
+_OPTIMUM = np.array([0.3, -0.2, 0.5])
+
+def _fake_molspin_run(executable_path, file_path, log_dir, NPZ=False, npz_dir=None, silent=True):
+    # Stands in for the MolSpin binary. It reads the zeeman field written into the msd and
+    # writes a .dat with a "fitness" column: one broad peak at _OPTIMUM plus local ripples.
+    import re
+    text = open(file_path).read()
+    name, idx = os.path.basename(file_path)[:-4].rsplit("_", 1)
+    field = re.search(r'Interaction zeeman\s*\{[^}]*?field\s*=\s*"([^"]+)"', text).group(1)
+    genome = np.array([float(x) for x in field.split()])
+    off = genome - _OPTIMUM
+    fitness = -np.sum(off ** 2) + 0.05 * np.sum(np.cos(20 * off))
+    out = os.path.join(os.path.dirname(file_path), "molspin_results", f"{name}-TE-{idx}.dat")
+    with open(out, "w") as f:
+        f.write("group fitness\nA %r\n" % float(fitness))
+    return None
+
+def test_feedback_action():
+    """A small genetic algorithm: each generation is a batch of experiments, and the next
+    generation is bred from the best results of the previous one. Sizes vary per generation."""
+
+    @MolSpinPy.FeedbackScript
+    def genome(step, var, state, index, generation):
+        # Runs once per experiment: returns this member's genome as the zeeman field.
+        if not hasattr(state, "population"):
+            g = np.random.default_rng(1000 + index).uniform(-1, 1, 3)  # random first generation
+        else:
+            g = state.population[index]
+        return np.asarray(g, dtype=float)
+
+    @genome.on_generation
+    def evolve(results, generation, state, stop, elite: int = 2, tournament: int = 3):
+        # Runs once between generations. Fitness comes only from the (fake) MolSpin output.
+        if not hasattr(state, "rng"):
+            state.rng = np.random.default_rng(7)
+            state.history = []
+        rng = state.rng
+        n = len(results)
+        fitness = np.array([float(results[i]["TE"]["fitness"][0]) for i in range(n)])
+        if hasattr(state, "population"):
+            pop = np.array(state.population)
+        else:
+            pop = np.array([np.random.default_rng(1000 + i).uniform(-1, 1, 3) for i in range(n)])
+
+        order = np.argsort(fitness)[::-1]
+        state.best, state.best_fitness = pop[order[0]].tolist(), float(fitness[order[0]])
+        state.history.append({"generation": generation, "size": n,
+                              "best": state.best_fitness, "mean": float(fitness.mean())})
+        if np.linalg.norm(pop[order[0]] - [0.3, -0.2, 0.5]) < 0.03:
+            stop()
+
+        def pick():
+            # tournament selection: the fittest of a few random members becomes a parent
+            contenders = rng.integers(0, n, tournament)
+            return pop[contenders[np.argmax(fitness[contenders])]]
+
+        next_size = max(8, 20 - 4 * generation)      # the batch size is free to change: 24, 20, 16, 12, 8...
+        sigma = 0.3 * 0.7 ** generation              # mutations shrink as the search converges
+        children = [pop[i] for i in order[:elite]]   # elitism: the best survive unchanged
+        while len(children) < next_size:
+            a, b = pick(), pick()
+            mix = rng.uniform(0, 1, 3)               # crossover: blend each gene of two parents
+            children.append(mix * a + (1 - mix) * b + rng.normal(0, sigma, 3))  # mutation
+        state.population = [c.tolist() for c in children]
+        return next_size                             # state.next_batch = next_size also works
+
+    dat = MolSpinPy.msd.MsdHandling.ConvertMSDtoDictionary("NV_centre_N14_old.msd")
+    manager = MolSpinPy.runtime.ActionManager()
+    manager.add_action(MolSpinPy.objects.Action(dat, genome, key="spinsystems.GS.interactions.zeeman.field"))
+    try:
+        manager.add_action(MolSpinPy.objects.Action(dat, genome, key="spinsystems.GS.interactions.nuclearzeeman.field"))
+        raise AssertionError("a second feedback action was accepted")
+    except ValueError:
+        pass
+
+    project = MolSpinPy.runtime.Project("feedback_test")
+    project.attach_dict(dat)
+    project._extract_settings()
+    project.attach_ActionManager(manager)
+    project._executable_path = os.path.abspath(__file__)  # any existing file; the run is faked
+
+    original = MolSpinPy.runtime.Project._execute_single_file_local
+    MolSpinPy.runtime.Project._execute_single_file_local = staticmethod(_fake_molspin_run)
+    try:
+        project.Deploy(batch=24, max_generations=15)
+    finally:
+        MolSpinPy.runtime.Project._execute_single_file_local = original
+
+    history = genome.state.history
+    print(f"{'gen':>3} {'size':>4} {'best fitness':>13} {'mean fitness':>13}")
+    for h in history:
+        print(f"{h['generation']:>3} {h['size']:>4} {h['best']:>13.4f} {h['mean']:>13.4f}")
+    print("best genome:", np.round(genome.state.best, 3), "optimum:", _OPTIMUM)
+
+    sizes = [g["size"] for g in genome._generation_log]
+    assert sizes[:4] == [24, 20, 16, 12] and all(a >= b for a, b in zip(sizes, sizes[1:])), sizes
+    assert history[-1]["mean"] > history[0]["mean"], "the population did not improve"
+    assert np.linalg.norm(np.array(genome.state.best) - _OPTIMUM) < 0.1, genome.state.best
+    try:
+        project.LoadHPC("u", "h", "k", "/tmp")
+        raise AssertionError("HPC accepted a feedback action")
+    except RuntimeError:
+        pass
+    shutil.rmtree("outputs/feedback_test", ignore_errors=True)
+    print("feedback action ok")
+
+
 #StrainT1times()
 #StrainPL()
 #test()
@@ -879,3 +987,4 @@ test_external_modules()
 test_very_complex_action()
 test_decorated_helper_rejected()
 test_dependency_limits()
+test_feedback_action()

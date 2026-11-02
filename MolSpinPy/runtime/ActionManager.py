@@ -9,6 +9,8 @@ class ActionManager:
         self._is_sorted = False
         self._buffer = history_size
     def add_action(self, action_instance : Action, priority = 0):
+        if getattr(action_instance.func, 'requires_results', False) and self.feedback_action is not None:
+            raise ValueError("Only one feedback action is currently supported per project.")
         if action_instance.parent is not None:
             action_instance.priority = priority
             action_instance.priority = action_instance.effective_priority
@@ -19,6 +21,19 @@ class ActionManager:
         if target not in self._registry:
             self._registry[target] = []
         self.registered_actions[target] = len(self._actions) - 1 
+    @property
+    def feedback_action(self):
+        for action in self._actions:
+            if getattr(action.func, 'requires_results', False):
+                return action
+        return None
+    @property
+    def has_feedback(self):
+        return self.feedback_action is not None
+    def set_context(self, index, generation):
+        action = self.feedback_action
+        if action is not None:
+            action.func.set_context(index, generation)
     def test_all(self):
         print("---Starting Action Tests---")
         _verified = self._verify_relationships()

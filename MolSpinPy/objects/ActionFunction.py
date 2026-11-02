@@ -5,6 +5,8 @@ import inspect
 from functools import wraps
 import warnings
 import ast
+import hashlib
+import numbers
 import textwrap
 from types import SimpleNamespace
 
@@ -90,6 +92,8 @@ class ActionFunction:
         return self.metadata_note
     
 class CustomActionFunction(ActionFunction):
+    _CORE_ARGS = ('step', 'var', 'state')
+
     def __init__(self, func = None):
         super().__init__()
         if(func != None):
@@ -105,7 +109,7 @@ class CustomActionFunction(ActionFunction):
         sig = inspect.signature(original_func)
         params = sig.parameters
 
-        core = ['step', 'var', 'state']
+        core = list(self._CORE_ARGS)
         param_names = list(params.keys())
         for i,expected in enumerate(core):
             #if expected not in params:
@@ -120,7 +124,7 @@ class CustomActionFunction(ActionFunction):
             if params[expected].kind == inspect.Parameter.KEYWORD_ONLY:
                 raise TypeError(f"'{expected}' must be a positional argument.")
 
-        self._param_names = [p for p in params if p not in ('step', 'var', 'state')]
+        self._param_names = [p for p in params if p not in self._CORE_ARGS]
         self._param = {
             p: params[p].default
             for p in self._param_names
@@ -209,14 +213,17 @@ class CustomActionFunction(ActionFunction):
             self._steps_per_action[action_id] = 0
         
         step = self._steps_per_action[action_id]
-        result = self._internal_func(step, var, self.state, **self._param)
+        result = self._invoke(step, var)
         
-        if result == None:
+        if result is None:
             result = var.value
         
         self._steps_per_action[action_id] += 1
         self._updated = True
         return result
+
+    def _invoke(self, step, var):
+        return self._internal_func(step, var, self.state, **self._param)
 
     def _set_updated_to_false(self):
         self._updated = False
@@ -245,6 +252,102 @@ def ActionScript(func):
             valid_args['state'] = state
         return func(**valid_args)
     return CustomActionFunction(wrapper)
+
+
+class FeedbackActionFunction(CustomActionFunction):
+    """A custom action whose later batches depend on the results of earlier ones.
+
+    The decorated function runs once per batch member (a step) and receives, besides
+    ``step``, ``var`` and ``state``, ``index`` (position in the batch) and ``generation``.
+    A hook registered with ``@fn.on_generation`` runs between batches and receives
+    ``results``, ``generation``, ``state`` and ``stop`` (any subset); it may return the next
+    batch size or set ``state.next_batch``. ``state`` is empty during the first generation.
+    """
+    _CORE_ARGS = ('step', 'var', 'state', 'index', 'generation')
+    _HOOK_ARGS = ('results', 'generation', 'state', 'stop')
+    requires_results = True
+
+    def __init__(self, func = None):
+        super().__init__(func)
+        self._index = 0
+        self._generation = 0
+        self._hook = None
+        self._hook_source = None
+        self._hook_dependencies = []
+        self._stop_requested = False
+        self._generation_log = []
+
+    def _invoke(self, step, var):
+        return self._internal_func(step, var, self.state, index=self._index,
+                                   generation=self._generation, **self._param)
+
+    def set_context(self, index, generation):
+        self._index = index
+        self._generation = generation
+
+    def on_generation(self, hook):
+        for pname, param in inspect.signature(hook).parameters.items():
+            if pname not in self._HOOK_ARGS and param.default is inspect.Parameter.empty:
+                raise TypeError(
+                    f"Generation hook '{hook.__name__}' has unknown required argument '{pname}'. "
+                    f"Available arguments: {', '.join(self._HOOK_ARGS)}"
+                )
+        self._hook = hook
+        try:
+            self._hook_source = textwrap.dedent(inspect.getsource(hook))
+            self._hook_dependencies = code_capture.capture_dependencies(hook)
+        except (OSError, TypeError):
+            self._hook_source = None
+            self._hook_dependencies = []
+        return hook
+
+    def _request_stop(self):
+        self._stop_requested = True
+
+    def Feedback(self, results, generation, batch_size):
+        """Run the generation hook; returns (next_batch_size, stop_requested)."""
+        self._stop_requested = False
+        if hasattr(self.state, 'next_batch'):
+            delattr(self.state, 'next_batch')
+        next_batch = None
+        if self._hook is not None:
+            available = {'results': results, 'generation': generation,
+                         'state': self.state, 'stop': self._request_stop}
+            accepted = inspect.signature(self._hook).parameters
+            next_batch = self._hook(**{k: v for k, v in available.items() if k in accepted})
+            if next_batch is None:
+                next_batch = getattr(self.state, 'next_batch', None)
+        if next_batch is None:
+            next_batch = batch_size
+        if isinstance(next_batch, bool) or not isinstance(next_batch, numbers.Integral) or next_batch < 0:
+            raise ValueError(f"Next batch size must be a non-negative integer, got {next_batch!r}")
+        return int(next_batch), self._stop_requested
+
+    def __metadata__(self):
+        return {
+            "note": self.metadata_note,
+            "generation_hook_source": self._hook_source,
+            "generation_hook_source_sha256": (
+                hashlib.sha256(self._hook_source.encode("utf-8")).hexdigest() if self._hook_source else None
+            ),
+            "generation_hook_dependencies": list(self._hook_dependencies),
+            "generation_log": list(self._generation_log),
+        }
+
+
+def FeedbackScript(func):
+    sig = inspect.signature(func)
+    params = sig.parameters
+
+    @wraps(func)
+    def wrapper(step, var, state, index = 0, generation = 0, **kwargs):
+        valid_args = {k: v for k, v in kwargs.items() if k in params}
+        for name, value in (('step', step), ('var', var), ('state', state),
+                            ('index', index), ('generation', generation)):
+            if name in params:
+                valid_args[name] = value
+        return func(**valid_args)
+    return FeedbackActionFunction(wrapper)
 
 #class LineSpaceAction(ActionFunction):
 #    def __init__(self):

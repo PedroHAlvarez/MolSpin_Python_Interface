@@ -6,7 +6,7 @@ from . import spin_object
 from .ActionVariable import DictionaryBoundVariable
 
 #actions 
-from .ActionFunction import ActionScript
+from .ActionFunction import ActionScript, FeedbackScript
 from .ActionObject import Action
 from . import Actions
 
