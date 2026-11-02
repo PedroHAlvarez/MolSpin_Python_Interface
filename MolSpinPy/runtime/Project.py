@@ -151,83 +151,80 @@ class Project():
         
         return None
     
+    _BINARY_SUBDIRS = ("", "bin", "build", "Release", "release")
+
     @staticmethod
-    def _find_all_paths(binary = "molspin"):
-        if os.name == "nt" and not binary.endswith(".exe"):
-            binary += ".exe"
+    def _binary_filenames():
+        return ("molspin.exe", "MolSpin.exe") if os.name == "nt" else ("molspin", "MolSpin")
 
-        path_env = os.environ.get("PATH", "")
-        path_sep = ";" if os.name == "nt" else ":"
-        directories = path_env.split(path_sep)
-
-        found_matches = []
-        for directory in directories:
-            clean_dir = directory.strip('"').strip()
-            full_path=os.path.join(clean_dir,binary)
-            if os.path.exists(full_path) and os.path.isfile(full_path):
-                if os.access(full_path, os.X_OK):
-                    found_matches.append(os.path.abspath(full_path))
-        return list(set(found_matches))
-    
     @staticmethod
-    def _is_valid_molspin_dir(full_path):
-        if not full_path or not os.path.exists(full_path) or not os.path.isfile(full_path):
-            return False
-            
-        normalized_path = os.path.abspath(full_path).lower()
-        path_parts = normalized_path.split(os.sep)
-        
-        return any("molspin" in part.lower() for part in path_parts)
-    
-    def _find_molspin_binary(self, custom_path = "../MolSpin"):
-        binary_name = "molspin"
+    def _is_executable_file(path):
+        return os.path.isfile(path) and os.access(path, os.X_OK)
 
-        if custom_path:
-            if os.path.isdir(custom_path):
-                full_path = os.path.join(custom_path, binary_name)
-            else:
-                full_path = custom_path
+    @classmethod
+    def _binary_in_location(cls, location):
+        """Resolve a file or a MolSpin directory (checking common build subfolders) to an executable."""
+        if not location:
+            return None
+        location = os.path.abspath(os.path.expanduser(os.path.expandvars(str(location))))
+        if os.path.isfile(location):
+            return location if cls._is_executable_file(location) else None
+        if not os.path.isdir(location):
+            return None
+        for subdir in cls._BINARY_SUBDIRS:
+            for name in cls._binary_filenames():
+                candidate = os.path.join(location, subdir, name)
+                if cls._is_executable_file(candidate):
+                    return candidate
+        return None
 
-            if os.path.exists(full_path) and os.path.isfile(full_path):
-                return os.path.abspath(full_path)
+    def _find_molspin_binary(self, custom_path=None):
+        """Locate the local MolSpin executable.
 
-        # Check Dedicated Environment Variable
-        # Users can set this in their terminal via: export MOLSPIN_PATH=/path/to/custom/molspin/
-        env_path = os.environ.get("MOLSPIN_PATH") or os.environ.get("MOLSPIN_HOME")
-        if env_path:
-            if os.path.isdir(env_path):
-                full_path = os.path.join(env_path, binary_name)
-            else:
-                full_path = env_path
+        Search order (first hit wins):
+          1. ``custom_path`` (the ``molspin=`` kwarg of Deploy): a binary or a MolSpin directory
+          2. ``MOLSPIN_PATH`` / ``MOLSPIN_HOME`` environment variables (same forms)
+          3. ``molspin`` on the system PATH
+          4. Common checkout locations: ./MolSpin, ../MolSpin and their parents' siblings
+        Directories are checked directly and in bin/, build/ and Release/.
+        Returns the absolute path, or None (after printing where it looked).
+        """
+        searched = []
 
-            if os.path.exists(full_path) and os.path.isfile(full_path):
-                return os.path.abspath(full_path)
+        def try_location(label, location):
+            if not location:
+                return None
+            found = self._binary_in_location(location)
+            searched.append(f"{label}: {location}" + ("" if found else " (not found)"))
+            return found
 
-        #current_search_dir = os.path.abspath(os.getcwd())
-#
-        #for _ in range(4):
-        #    potential_subdirs = [
-        #        os.path.join(current_search_dir, "molspin"),
-        #        os.path.join(current_search_dir, "MolSpin"),
-        #        current_search_dir
-        #    ]
-#
-        #    for subdir in potential_subdirs:
-        #        if os.path.exists(subdir) and os.path.isdir(subdir):
-#
-        #            for sub_target in [subdir, os.path.join(subdir, "bin"), os.path.join(subdir, "build")]:
-        #                full_path = os.path.join(sub_target, binary_name)
-        #                if os.path.exists(full_path) and os.path.isfile(full_path):
-        #                    return os.path.abspath(full_path)
-#
-#
-        #    parent_dir = os.path.dirname(current_search_dir)
-        #    if parent_dir == current_search_dir:
-        #        break
-        #    current_search_dir = parent_dir
-#
-        #return None
-    
+        found = try_location("molspin= argument", custom_path)
+        if found:
+            return found
+
+        for var in ("MOLSPIN_PATH", "MOLSPIN_HOME"):
+            found = try_location(f"${var}", os.environ.get(var))
+            if found:
+                return found
+
+        for name in self._binary_filenames():
+            on_path = shutil.which(name)
+            if on_path:
+                return os.path.abspath(on_path)
+        searched.append("system PATH (not found)")
+
+        cwd = os.path.abspath(os.getcwd())
+        search_roots = [cwd, os.path.dirname(cwd), os.path.dirname(os.path.dirname(cwd))]
+        for root in dict.fromkeys(search_roots):
+            for folder in ("MolSpin", "molspin"):
+                found = try_location("checkout", os.path.join(root, folder))
+                if found:
+                    return found
+
+        print("Could not find a MolSpin executable. Searched:\n  " + "\n  ".join(searched))
+        print("Pass Deploy(molspin='/path/to/MolSpin'), set MOLSPIN_PATH, or add molspin to PATH.")
+        return None
+
     def VerifyIntegrity(self, output_dir, expected_steps, file_prefix):
         print(f"\n--- Verifying file creation for '{output_dir}' ---")
         files_to_check = []
@@ -583,7 +580,7 @@ class Project():
             manager=self._manager,
             remote_binary_path=remote_binary_path,
             remote_working_dir=remote_working_dir,
-            partition=kwargs.pop('partition', 'rosa.p' if self._hpc.cluster_profile == 'rosa' else 'standard96'),
+            partition=kwargs.pop('partition', self._hpc.default_partition),
             walltime=kwargs.pop('walltime', '01:00:00'),
             calcs_per_node=kwargs.pop('max_concurrent', 20),
             max_nodes=kwargs.pop('max_nodes', 10),
@@ -608,126 +605,15 @@ class Project():
             job_ids=job_id
         )
 
-    def UpdateBinary(self, remote_binary_path,armadillo_path,partition = "standard96:test",hpc_module_list = None):
+    def UpdateBinary(self, remote_binary_path, armadillo_path="", partition=None, hpc_module_list=None):
+        """Sync the remote MolSpin checkout and rebuild it as described by the active HpcProfile."""
         if self._hpc == None:
             return RuntimeError("No HPC connection found - use LoadHPC() first to establish a connection.")
-        if getattr(self._hpc, "cluster_profile", "gwdg") == "rosa":
-            rosa_partition = "rosa.p" if partition == "standard96" else partition
-            return self._UpdateBinaryROSA(remote_binary_path, partition=rosa_partition, hpc_module_list=hpc_module_list)
-        check_cmd = f"[ -d '{remote_binary_path}/.git' ] && echo 'VALID' || echo 'INVALID'"
+        profile = self._hpc.profile
+        partition = partition or profile.build_partition or profile.default_partition
+        modules = hpc_module_list or profile.build_modules
         hpcssh = self._hpc._connect()
-        _,stdout,_ = hpcssh.exec_command(check_cmd)
-        if stdout.read().decode('utf-8').strip() != "VALID":
-            print(f"Error: {remote_binary_path} is not a valid Git repository.")
-            return False
-        branch_cmd = f"cd {remote_binary_path} && git branch --show-current"
-        _, stdout, stderr = hpcssh.exec_command(branch_cmd)
-        active_branch = stdout.read().decode('utf-8').strip() or "main"
-
-        print(f"Detected active branch: '{active_branch}' for folder '{remote_binary_path.split('/')[-1]}'")
-        fetch_cmd = (
-            f"cd {remote_binary_path} && "
-            f"git fetch --all"
-            #f"git pull origin {active_branch} && "
-        )
-
-        exit_status = stderr.channel.recv_exit_status()
-
-        _, stdout, stderr = hpcssh.exec_command(fetch_cmd)
-        hash_cmd = (
-            f"cd {remote_binary_path} && "
-            f"git rev-parse HEAD && "
-            f"git rev-parse origin/{active_branch}"
-        )
-        _, stdout, _ = hpcssh.exec_command(hash_cmd)
-        local_hash, remote_hash = stdout.read().decode('utf-8').strip().split()
-        if local_hash == remote_hash:
-            print(f"MolSpin is already up-to-date on branch '{active_branch}'. No action required.")
-            #return True
-        if AssertFlags.get("ASSERT_GIT", True):
-            upgrade_cmd = (
-                f"cd {remote_binary_path} && "
-                f"git reset --hard origin/{active_branch} && "
-                f"git clean -fd"
-            )
-            _, stdout, stderr = hpcssh.exec_command(upgrade_cmd)
-            stdout_output = stdout.read().decode('utf-8').strip()
-            stderr_output = stderr.read().decode('utf-8').strip()
-            if stderr.channel.recv_exit_status() != 0:
-                print(f"Error during Git pull: {stderr_output}")
-                return False
-            print(f"Git pull successful. Output:\n{stdout_output}")
-        else:
-            print("Skipping Git pull due to flag ASSERT_GIT=False. Ensure your repository is up-to-date manually.")
-        modules = f"-lopenblas -llapack -fopenmp -DARMA_NO_DEBUG"
-        armadillo_string = f"ARMADILLO = -larmadillo {modules}"
-        old_path = f"path/to/armadillo/installdir"
-        #modify_makefile_cmd = (
-        #    f"cd {remote_binary_path} && " 
-        #    f"sed -i 's|^{armadillo_string}|# {armadillo_string}|g' makefile && "
-        #    f"sed -i 's|^# ARMADILLO = -I/{old_path}/include/ -DARMA_DONT_USE_WRAPPER -fopenmp|ARMADILLO = -I{armadillo_path}/include/ {modules} -DARMA_DONT_USE_WRAPPER|g' makefile"
-        #)
-
-        armadillo_cflags = f"ARMADILLO_CFLAGS = -I{armadillo_path}/include"
-        armadillo_libs = f"ARMADILLO_LIBS = -L{armadillo_path}/lib64 -larmadillo"
-
-        modify_makefile_cmd = (
-            f"cd {remote_binary_path} && "
-            f"sed -i 's|^ARMADILLO_CFLAGS ?=.*|{armadillo_cflags}|g' makefile && "
-            f"sed -i 's|^ARMADILLO_LIBS ?=.*|{armadillo_libs}|g' makefile"
-        )
-
-        _, _, stderr = hpcssh.exec_command(modify_makefile_cmd)
-        if stderr.channel.recv_exit_status() != 0:
-            print(f"Failed to modify Makefile:\n{stderr.read().decode('utf-8')}")
-            return None
-        clean_cmd = f"cd {remote_binary_path} && make clean"
-        _, _, stderr = hpcssh.exec_command(clean_cmd)
-        wait = stderr.channel.recv_exit_status()
-        module_load_string = " && ".join([f"module load {mod}" for mod in (hpc_module_list or [])])
-        compile_cmd = (
-            f"cd {remote_binary_path} && "
-            f"srun -p {partition} -N 1 -c 16 --time=00:30:00 --job-name='MolSpinCompile' "
-            f"bash -l -c 'module purge && {module_load_string} && make -j16'"
-        )
-
-        _, stdout, stderr = hpcssh.exec_command(compile_cmd)
-        if stderr.channel.recv_exit_status() != 0:
-            print("C++ Compilation failed on the compute node!")
-            print(f"HPC Diagnostics (stderr):\n{stderr.read().decode('utf-8')}")
-            return None
-        print("MolSpin successfully updated.")
-
-
-    def _UpdateBinaryROSA(self, remote_binary_path, partition="rosa.p", hpc_module_list=None):
-        """ROSA-only binary update path. Legacy GWDG UpdateBinary stays untouched."""
-        hpcssh = self._hpc._connect()
-
-        def run_remote(command):
-            _, stdout, stderr = hpcssh.exec_command(command)
-            channel = stdout.channel
-            stdout_chunks = []
-            stderr_chunks = []
-
-            while True:
-                while channel.recv_ready():
-                    stdout_chunks.append(channel.recv(65536))
-                while channel.recv_stderr_ready():
-                    stderr_chunks.append(channel.recv_stderr(65536))
-
-                if channel.exit_status_ready():
-                    while channel.recv_ready():
-                        stdout_chunks.append(channel.recv(65536))
-                    while channel.recv_stderr_ready():
-                        stderr_chunks.append(channel.recv_stderr(65536))
-                    break
-
-                time.sleep(0.01)
-
-            exit_status = channel.recv_exit_status()
-            stdout_text = b"".join(stdout_chunks).decode("utf-8", errors="replace")
-            stderr_text = b"".join(stderr_chunks).decode("utf-8", errors="replace")
-            return exit_status, stdout_text, stderr_text
+        run_remote = self._make_remote_runner(hpcssh)
 
         try:
             check_cmd = f"[ -d '{remote_binary_path}/.git' ] && echo 'VALID' || echo 'INVALID'"
@@ -791,40 +677,156 @@ class Project():
             else:
                 print("Skipping Git synchronization due to ASSERT_GIT=False. Ensure the repository is in the desired state manually.")
 
-            clean_cmd = f"cd {remote_binary_path} && make clean"
-            exit_status, _, stderr_output = run_remote(clean_cmd)
-            if exit_status != 0:
-                print(f"make clean failed:\n{stderr_output.strip()}")
-                return False
-
-            modules = hpc_module_list or (
-                "hpc-env/13.1",
-                "Armadillo/15.0.1-foss-2023a",
-                "SciPy-bundle/2023.05-foss-2023a",
-            )
-            module_load_string = " && ".join(f"module load {mod}" for mod in modules)
-            compile_cmd = (
-                f"cd {remote_binary_path} && "
-                f"srun -p {partition} -N 1 -c 16 --time=00:30:00 --job-name='MolSpinCompile' "
-                f"bash -l -c 'module purge && {module_load_string} && "
-                f"make -j16 ARCHFLAGS= LOOPFLAGS='"
-            )
-
-            print(f"Submitting MolSpin compilation through Slurm partition '{partition}'...")
-            exit_status, stdout_output, stderr_output = run_remote(compile_cmd)
-            if exit_status != 0:
-                print("C++ compilation failed on the compute node.")
-                if stdout_output.strip():
-                    stdout_tail = "\n".join(stdout_output.strip().splitlines()[-40:])
-                    print(f"HPC Diagnostics (stdout tail):\n{stdout_tail}")
-                if stderr_output.strip():
-                    print(f"HPC Diagnostics (stderr):\n{stderr_output.strip()}")
+            if not self._build_remote_binary(run_remote, remote_binary_path, armadillo_path, partition, modules):
                 return False
 
             print("MolSpin successfully updated and compiled.")
             return True
         finally:
             hpcssh.close()
+
+    def InstallBinary(self, remote_binary_path, repo_url, armadillo_path="", branch=None,
+                      partition=None, hpc_module_list=None):
+        """Clone MolSpin onto the cluster, build it, and (if the profile needs one) create the Python venv.
+
+        remote_binary_path must not already contain a checkout; use UpdateBinary for that.
+        """
+        if self._hpc == None:
+            return RuntimeError("No HPC connection found - use LoadHPC() first to establish a connection.")
+        profile = self._hpc.profile
+        partition = partition or profile.build_partition or profile.default_partition
+        modules = hpc_module_list or profile.build_modules
+        remote_binary_path = remote_binary_path.rstrip("/")
+        hpcssh = self._hpc._connect()
+        run_remote = self._make_remote_runner(hpcssh)
+
+        try:
+            exit_status, stdout_output, _ = run_remote(
+                f"[ -e '{remote_binary_path}' ] && echo 'EXISTS' || echo 'FREE'"
+            )
+            if exit_status != 0:
+                print("Could not inspect the remote install location.")
+                return False
+            if stdout_output.strip() == "EXISTS":
+                exit_status, stdout_output, _ = run_remote(f"ls -A '{remote_binary_path}' | head -n 1")
+                if stdout_output.strip():
+                    print(f"Error: {remote_binary_path} already exists and is not empty. Use UpdateBinary() instead.")
+                    return False
+
+            if profile.use_external_armadillo_path and not armadillo_path:
+                print("This cluster profile requires armadillo_path to patch the makefile.")
+                return False
+
+            parent_dir = os.path.dirname(remote_binary_path) or "."
+            branch_arg = f"--branch {branch} " if branch else ""
+            clone_cmd = f"mkdir -p '{parent_dir}' && git clone {branch_arg}'{repo_url}' '{remote_binary_path}'"
+            print(f"Cloning {repo_url} into {remote_binary_path}...")
+            exit_status, _, stderr_output = run_remote(clone_cmd)
+            if exit_status != 0:
+                print(f"Git clone failed:\n{stderr_output.strip()}")
+                return False
+
+            if profile.activate_venv:
+                if not self._create_remote_venv(run_remote, remote_binary_path, profile):
+                    return False
+
+            if not self._build_remote_binary(run_remote, remote_binary_path, armadillo_path, partition, modules):
+                return False
+
+            print(f"MolSpin successfully installed at {remote_binary_path}.")
+            return True
+        finally:
+            hpcssh.close()
+
+    @staticmethod
+    def _make_remote_runner(hpcssh):
+        """Return run_remote(command) -> (exit_status, stdout, stderr) over an open SSH client."""
+        def run_remote(command):
+            _, stdout, stderr = hpcssh.exec_command(command)
+            channel = stdout.channel
+            stdout_chunks = []
+            stderr_chunks = []
+
+            while True:
+                while channel.recv_ready():
+                    stdout_chunks.append(channel.recv(65536))
+                while channel.recv_stderr_ready():
+                    stderr_chunks.append(channel.recv_stderr(65536))
+
+                if channel.exit_status_ready():
+                    while channel.recv_ready():
+                        stdout_chunks.append(channel.recv(65536))
+                    while channel.recv_stderr_ready():
+                        stderr_chunks.append(channel.recv_stderr(65536))
+                    break
+
+                time.sleep(0.01)
+
+            exit_status = channel.recv_exit_status()
+            stdout_text = b"".join(stdout_chunks).decode("utf-8", errors="replace")
+            stderr_text = b"".join(stderr_chunks).decode("utf-8", errors="replace")
+            return exit_status, stdout_text, stderr_text
+        return run_remote
+
+    def _create_remote_venv(self, run_remote, remote_binary_path, profile):
+        module_load_string = " && ".join(f"module load {mod}" for mod in profile.runtime_modules)
+        venv_path = f"{remote_binary_path}/{profile.venv_subpath}"
+        packages = " ".join(profile.venv_packages)
+        venv_cmd = (
+            f"bash -l -c 'module purge && {module_load_string} && "
+            f"python -m venv {venv_path} && "
+            f"{venv_path}/bin/python -m pip install --upgrade pip {packages}'"
+        )
+        print(f"Creating Python virtualenv at {venv_path}...")
+        exit_status, _, stderr_output = run_remote(venv_cmd)
+        if exit_status != 0:
+            print(f"Virtualenv creation failed:\n{stderr_output.strip()}")
+            return False
+        return True
+
+    def _build_remote_binary(self, run_remote, remote_binary_path, armadillo_path, partition, modules):
+        """Patch the makefile if the profile needs it, then clean and compile on a compute node."""
+        profile = self._hpc.profile
+        if profile.use_external_armadillo_path:
+            if not armadillo_path:
+                print("This cluster profile requires armadillo_path to patch the makefile.")
+                return False
+            makefile_cmd = (
+                f"cd {remote_binary_path} && "
+                f"sed -i 's|^ARMADILLO_CFLAGS ?=.*|ARMADILLO_CFLAGS = -I{armadillo_path}/include|g' makefile && "
+                f"sed -i 's|^ARMADILLO_LIBS ?=.*|ARMADILLO_LIBS = -L{armadillo_path}/lib64 -larmadillo|g' makefile"
+            )
+            exit_status, _, stderr_output = run_remote(makefile_cmd)
+            if exit_status != 0:
+                print(f"Failed to modify Makefile:\n{stderr_output.strip()}")
+                return False
+
+        clean_cmd = f"cd {remote_binary_path} && make clean"
+        exit_status, _, stderr_output = run_remote(clean_cmd)
+        if exit_status != 0:
+            print(f"make clean failed:\n{stderr_output.strip()}")
+            return False
+
+        module_load_string = " && ".join(f"module load {mod}" for mod in modules)
+        make_args = " ".join(profile.build_make_args)
+        compile_cmd = (
+            f"cd {remote_binary_path} && "
+            f"srun -p {partition} -N 1 -c 16 --time=00:30:00 --job-name='MolSpinCompile' "
+            f"bash -l -c 'module purge && {module_load_string} && "
+            f"make -j16 {make_args}'"
+        )
+
+        print(f"Submitting MolSpin compilation through Slurm partition '{partition}'...")
+        exit_status, stdout_output, stderr_output = run_remote(compile_cmd)
+        if exit_status != 0:
+            print("C++ compilation failed on the compute node.")
+            if stdout_output.strip():
+                stdout_tail = "\n".join(stdout_output.strip().splitlines()[-40:])
+                print(f"HPC Diagnostics (stdout tail):\n{stdout_tail}")
+            if stderr_output.strip():
+                print(f"HPC Diagnostics (stderr):\n{stderr_output.strip()}")
+            return False
+        return True
 
     def GenerateParamMap(self,steps):
         base_state = copy.deepcopy(self._resolved_dict)

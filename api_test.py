@@ -102,12 +102,21 @@ def StrainT1times():
     project.attach_dict(dat)
     project._extract_settings()
     project.attach_ActionManager(manager)
-    project.LoadHPC(hpc_username="u28375",hpc_host="glogin-p2.hpc.gwdg.de", hpc_key_path="~/.ssh/id_ed25519", remote_working_dir="/user/benjamin.tigg/u28375")
-    project.UpdateBinary("/projects/extern/nhr/nhr_ni/nip00058/dir.project/MolSpinBenji","/projects/extern/nhr/nhr_ni/nip00058/dir.project/armadillo-12")
+    # cluster_profile is a registered name ("gwdg", "rosa", see HpcProfile.available())
+    # or an HpcProfile instance (see CustomClusterProfile below).
+    project.LoadHPC(hpc_username="u28375",hpc_host="glogin-p2.hpc.gwdg.de", hpc_key_path="~/.ssh/id_ed25519", remote_working_dir="/user/benjamin.tigg/u28375", cluster_profile="gwdg")
+    # First time on a cluster: clone + (venv) + build. Afterwards use UpdateBinary.
+    # project.InstallBinary("/projects/extern/nhr/nhr_ni/nip00058/dir.project/MolSpinBenji", repo_url="https://github.com/<owner>/MolSpin.git",
+    #                       armadillo_path="/projects/extern/nhr/nhr_ni/nip00058/dir.project/armadillo-12")
+    # Partition, modules and make args come from the profile; armadillo_path is only
+    # used by profiles with use_external_armadillo_path=True (gwdg).
+    project.UpdateBinary("/projects/extern/nhr/nhr_ni/nip00058/dir.project/MolSpinBenji", armadillo_path="/projects/extern/nhr/nhr_ni/nip00058/dir.project/armadillo-12")
     return
+    # partition defaults to the profile's default_partition when omitted
     id = project.SubmitToHPC(hpc_username="u28375",hpc_host="glogin-p2.hpc.gwdg.de",
     hpc_key_path="~/.ssh/id_ed25519", remote_binary_path="/projects/extern/nhr/nhr_ni/nip00058/dir.project/MolSpinBenji",
-    remote_working_dir="/user/benjamin.tigg/u28375", partition="standard96s:test", walltime="1:00:00", max_nodes=5, max_concurrent=10, est_sim_time=0.5, safety_buffer=1.4)
+    remote_working_dir="/user/benjamin.tigg/u28375", partition="standard96s:test", walltime="1:00:00", max_nodes=5, max_concurrent=10, est_sim_time=0.5, safety_buffer=1.4,
+    armadillo="/projects/extern/nhr/nhr_ni/nip00058/dir.project/armadillo-12")
     #id= 13921951
     #id = ['14453268','14453267']
     project.WatchHPC(id)
@@ -116,6 +125,42 @@ def StrainT1times():
     #    remote_working_dir="/user/benjamin.tigg/u28375")
     project.DownloadFromHPC(id, remote_working_dir="/user/benjamin.tigg/u28375", local_npz_output_path="results/")
     #project.Deploy(NPZ = True, max_processes = 20)
+
+def CustomClusterProfile():
+    # Dummy profile for a made-up cluster. Nothing here is real: replace the
+    # modules/partitions with what `module avail` and `sinfo` show on your cluster.
+    dummy = MolSpinPy.runtime.HpcProfile(
+        name="dummycluster",
+        default_partition="compute",
+        runtime_modules=("gcc/12.2.0", "Armadillo/12.6.0", "python/3.11"),
+        build_modules=("gcc/12.2.0", "Armadillo/12.6.0"),
+        build_partition="debug",
+        activate_venv=True,
+        use_external_armadillo_path=False,
+        build_make_args=("ARCHFLAGS=",),
+        metadata_extra={"cluster_profile": "dummycluster"},
+    )
+
+    # Option 1: register it so it can be selected by name.
+    MolSpinPy.runtime.HpcProfile.register(dummy)
+    print(MolSpinPy.runtime.HpcProfile.available())  # ['dummycluster', 'gwdg', 'rosa']
+
+    dat = MolSpinPy.msd.MsdHandling.ConvertMSDtoDictionary("NV_centre_N14.msd")
+    project = MolSpinPy.runtime.Project("DummyClusterTest")
+    project.attach_dict(dat)
+    project._extract_settings()
+    project.attach_ActionManager(MolSpinPy.runtime.ActionManager())
+    project.LoadHPC(hpc_username="user", hpc_host="login.dummy.example", hpc_key_path="~/.ssh/id_ed25519",
+                    remote_working_dir="/home/user/work", cluster_profile="dummycluster")
+
+    # Option 2: pass the instance directly (no registration needed), optionally tweaked:
+    #   cluster_profile=dummy.with_overrides(default_partition="gpu")
+    #
+    # project.UpdateBinary("/home/user/MolSpin")
+    # id = project.SubmitToHPC(hpc_username="user", hpc_host="login.dummy.example", hpc_key_path="~/.ssh/id_ed25519",
+    #                          remote_binary_path="/home/user/MolSpin", remote_working_dir="/home/user/work")
+    # project.WatchHPC(id)
+    # project.DownloadFromHPC(id, remote_working_dir="/home/user/work", local_npz_output_path="results/")
 
 def StrainPL():
     dat = MolSpinPy.msd.MsdHandling.ConvertMSDtoDictionary("NV_centre_N14.msd")

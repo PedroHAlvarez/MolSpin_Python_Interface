@@ -14,55 +14,9 @@ import tarfile
 from . import ActionManager
 from ..msd import FileTemplate , MsdHandling, MSDWriter
 from .Metadata import ProjectMetadata
+from .HpcProfile import HpcProfile
 from ..utility import AssertFlags
 
-
-HPC_PROFILES = {
-    "gwdg": {
-        "default_partition": "standard96",
-        "runtime_modules": (
-            "gcc/11.5.0",
-            "openblas",
-            "netlib-lapack",
-            "python/3.11.9",
-        ),
-        "build_modules": (
-            "gcc/11.5.0",
-            "openblas",
-            "netlib-lapack",
-            "python/3.11.9",
-        ),
-        "activate_venv": True,
-        "use_external_armadillo_path": True,
-        "build_make_args": (),
-    },
-    "rosa": {
-        "default_partition": "rosa.p",
-        "runtime_modules": (
-            "hpc-env/13.1",
-            "Armadillo/15.0.1-foss-2023a",
-            "SciPy-bundle/2023.05-foss-2023a",
-        ),
-        "build_modules": (
-            "hpc-env/13.1",
-            "Armadillo/15.0.1-foss-2023a",
-            "SciPy-bundle/2023.05-foss-2023a",
-        ),
-        "activate_venv": False,
-        "use_external_armadillo_path": False,
-        "build_make_args": ("ARCHFLAGS=", "LOOPFLAGS="),
-    },
-}
-
-
-def get_hpc_profile(name):
-    profile_name = (name or "gwdg").lower()
-    if profile_name not in HPC_PROFILES:
-        available = ", ".join(sorted(HPC_PROFILES))
-        raise ValueError(
-            f"Unknown HPC cluster profile '{name}'. Available profiles: {available}"
-        )
-    return profile_name, copy.deepcopy(HPC_PROFILES[profile_name])
 
 class RemoteHpcOrchestrator:
     def __init__(self, username, hpc_host, key_path, proxy_host=None, cluster_profile="gwdg", config_file = '~/.ssh/config'):
@@ -71,32 +25,19 @@ class RemoteHpcOrchestrator:
         self.key_path = os.path.expanduser(key_path)
         self.config_file = config_file
         self.proxy_host = proxy_host
-        self.cluster_profile, self.profile = get_hpc_profile(cluster_profile)
+        self.profile = HpcProfile.get(cluster_profile)
         self.remote_working_dir = None
 
     @property
+    def cluster_profile(self):
+        return self.profile.name
+
+    @property
     def default_partition(self):
-        return self.profile["default_partition"]
+        return self.profile.default_partition
 
     def _runtime_environment(self, remote_binary_path, armadillo_path=""):
-        if self.cluster_profile == "gwdg":
-            # Preserve the legacy GWDG runtime block byte-for-byte.
-            return f'''module purge
-module load gcc/11.5.0
-module load openblas
-module load netlib-lapack
-module load python/3.11.9
-
-export LD_LIBRARY_PATH="{armadillo_path}/lib64:$LD_LIBRARY_PATH"
-
-source {remote_binary_path}/molspinpyi_env/bin/activate'''
-
-        return "\n".join((
-            "module purge",
-            "module load hpc-env/13.1",
-            "module load Armadillo/15.0.1-foss-2023a",
-            "module load SciPy-bundle/2023.05-foss-2023a",
-        ))
+        return self.profile.runtime_environment(remote_binary_path, armadillo_path)
 
     @staticmethod
     def calculate_hpc_schedule(total_tasks, max_nodes=5, max_concurrent=20, 
@@ -339,8 +280,7 @@ fi
                 "max_concurrent": calcs_per_node,
                 "max_nodes": max_nodes,
             }
-            if self.cluster_profile == "rosa":
-                metadata_extra["cluster_profile"] = "rosa"
+            metadata_extra.update(self.profile.metadata_extra)
 
             metadata_json, metadata_markdown = metadata.write(
                 ".",
@@ -435,135 +375,10 @@ fi
         return submitted_job_ids
     
     def download_remote_deployment(self, project_name, remote_working_dir, local_npz_path, job_ids):
-        if self.cluster_profile == "rosa":
-            return self._download_remote_deployment_rosa(
-                project_name=project_name,
-                remote_working_dir=remote_working_dir,
-                local_npz_path=local_npz_path,
-                job_ids=job_ids,
-            )
-
-        hpc_ssh = self._connect()
-        if isinstance(job_ids, str):
-            job_ids = [job_ids]
-        jobs_comma_separated = ",".join(job_ids)
-        _, sq_out, _ = hpc_ssh.exec_command(f"squeue -j {jobs_comma_separated} -h")
-        active_jobs = sq_out.read().decode().strip()
-
-        if active_jobs:
-            remaining_lines = active_jobs.split("\n")
-            hpc_ssh.close()
-            print(f"\n[Cluster Update]: Active Jobs found in queue ({len(remaining_lines)} rows matching).")
-            print("Run download method later.")
-            return False        
-        
-        print(f"\n[Success]: All tracked jobs ({jobs_comma_separated}) have finished computing!")
-        
-        #print(f"Job {job_id} is complete! Starting download")
-        #remote_tar_path = f"{remote_working_dir.rstrip('/')}/workspace_{job_id}.tar"
-        #remote_tar_path = f"{remote_working_dir.rstrip('/')}/workspace_$SLURM_ARRAY_JOB_ID.tar"
-        if not AssertFlags.get("ASSERT_OSW"):
-            remote_results_dir = f"{remote_working_dir.rstrip('/')}/molspin_workspace_{project_name}"
-        else:
-            remote_results_dir = f"{remote_working_dir.rstrip('/')}/molspin_run_workspace"
-        parent_dir = os.path.dirname(remote_results_dir)
-        #local_temp_tar = rf"./{project_name}.tar.gz"
-        transport = hpc_ssh.get_transport()
-        if transport is not None:
-            transport.set_keepalive(10)
-            
-        sftp = hpc_ssh.open_sftp()
-        sftp.get_channel().settimeout(15.0)
-        try:
-            sftp.stat(remote_results_dir)
-        except IOError:
-            print(f"Error: Staging workspace directory {remote_results_dir} not found.")
-            sftp.close()
-            hpc_ssh.close()
-            return False
-        
-        job_ids.pop()
-        target_tar_files = [f"workspace_{jid}.tar" for jid in job_ids]
-        verified_tar_files = []
-        for tar_file in target_tar_files:
-            remote_tar_path = f"{parent_dir.rstrip('/')}/{tar_file}"
-            try:
-                sftp.stat(remote_tar_path)
-                verified_tar_files.append(tar_file)
-            except IOError:
-                print(f"Warning: Expected result archive '{tar_file}' was not found on the host filesystem.")
-        
-        if not verified_tar_files:
-            print("No output .tar result files")
-            sftp.close()
-            hpc_ssh.close()
-            return False
-        
-        print(f"Found {len(verified_tar_files)} .tar files")
-        #print("Archiving and compressing remote .dat files on HPC")
-        #tar_cmd = f"tar -czf {remote_tar_path} -C {os.path.dirname(remote_results_dir)} molspin_run_workspace"
-        #stdin, stdout, stderr = hpc_ssh.exec_command(tar_cmd)
-        #if stdout.channel.recv_exit_status() != 0:
-        #    print(f"Compression failed on HPC: {stderr.read().decode()}")
-        #    hpc_ssh.close()
-        #    return False
-        
-        start_download_time = time.time()
-
-        stats = {
-            'last bytes': 0,
-            'last time': time.time(),
-            'current speed': 0.0
-        }
-
-        def ProgressStats(transferred, total):
-            current_time = time.time()
-            time_diff = current_time - stats['last time']
-            if time_diff >= 1.0:
-                bytes_diff = transferred - stats['last bytes']
-                stats['current speed'] = (bytes_diff / (1024**2)) / time_diff
-                stats['last bytes'] = transferred
-                stats['last time'] = current_time
-            
-            done_mb = transferred / (1024**2)
-            total_mb = total / (1024**2)
-            msg = f"\rStreaming zip | Speed: {stats['current speed']:6.2f} MB/s | {done_mb:6.1f}/{total_mb:.1f} MB"
-            sys.stdout.write(msg)
-            sys.stdout.flush()
-
-        for tar_file in verified_tar_files:
-            try:
-                print(f"\nPulling down: {tar_file}")
-                specific_remote_tar = f"{parent_dir.rstrip('/')}/{tar_file}"
-                specific_local_tar = rf"./{os.path.splitext(tar_file)[0]}_{project_name}.tar"
-                sftp.get(remotepath=specific_remote_tar, localpath=specific_local_tar, callback=ProgressStats)
-                print()
-            except Exception as e:
-                print(f"\n[Critical Failure] Download stream broken for {tar_file}: {e}")
-                sftp.close()
-                hpc_ssh.close()
-                return False
-    
-        print("Cleaning up remote HPC workspace and tarball archive files")
-        paths_to_clean = " ".join([f"{parent_dir.rstrip('/')}/{tf}" for tf in verified_tar_files])
-        cleanup_cmd = f"rm -rf {remote_results_dir} {paths_to_clean}"
-        _, stdout, _ = hpc_ssh.exec_command(cleanup_cmd)
-        stdout.channel.recv_exit_status()
-        print("Remote workspace scrub complete")
-
-        sftp.close()
-        hpc_ssh.close()
-        
-        total_time = time.time() - start_download_time
-        mins, secs = divmod(int(total_time), 60)
-        print(f"Data successfully downloaded! Total time: {mins}m:{secs}s")
-        return True
-
-    def _download_remote_deployment_rosa(self, project_name, remote_working_dir, local_npz_path, job_ids):
-        """ROSA-only result retrieval. Legacy GWDG download behavior stays untouched."""
+        """Retrieve one validated result archive and extract it into local_npz_path."""
         normalized_job_ids = [str(job_ids)] if isinstance(job_ids, str) else [str(job_id) for job_id in job_ids]
         if not normalized_job_ids:
-            print("No Slurm job IDs were supplied for ROSA result retrieval.")
+            print("No Slurm job IDs were supplied for result retrieval.")
             return False
 
         main_job_id = normalized_job_ids[0]
@@ -600,13 +415,13 @@ fi
             try:
                 sftp.stat(remote_results_dir)
             except IOError:
-                print(f"Error: ROSA staging workspace directory {remote_results_dir} not found.")
+                print(f"Error: staging workspace directory {remote_results_dir} not found.")
                 return False
 
             try:
                 remote_tar_stat = sftp.stat(remote_tar_path)
             except IOError:
-                print(f"Error: Expected ROSA result archive '{remote_tar_path}' was not found.")
+                print(f"Error: Expected result archive '{remote_tar_path}' was not found.")
                 return False
 
             os.makedirs(local_output_dir, exist_ok=True)
@@ -633,14 +448,14 @@ fi
                 sys.stdout.write(msg)
                 sys.stdout.flush()
 
-            print(f"Pulling down ROSA result archive: {os.path.basename(remote_tar_path)}")
+            print(f"Pulling down result archive: {os.path.basename(remote_tar_path)}")
             sftp.get(remotepath=remote_tar_path, localpath=local_tar_path, callback=ProgressStats)
             print()
 
             local_size = os.path.getsize(local_tar_path)
             if local_size != remote_tar_stat.st_size:
                 print(
-                    "Error: Downloaded ROSA archive size does not match the remote archive "
+                    "Error: Downloaded archive size does not match the remote archive "
                     f"({local_size} != {remote_tar_stat.st_size})."
                 )
                 return False
@@ -648,38 +463,39 @@ fi
             with tarfile.open(local_tar_path, "r") as archive:
                 members = archive.getmembers()
                 if not members:
-                    print("Error: Downloaded ROSA result archive is empty.")
+                    print("Error: Downloaded result archive is empty.")
                     return False
 
                 npz_members = [member for member in members if member.isfile() and member.name.endswith(".npz")]
                 log_members = [member for member in members if member.isfile() and member.name.endswith(".log")]
                 if not npz_members or not log_members:
-                    print("Error: Downloaded ROSA result archive does not contain both .npz and .log products.")
+                    print("Error: Downloaded result archive does not contain both .npz and .log products.")
                     return False
 
                 output_root = os.path.realpath(local_output_dir)
                 for member in members:
                     target_path = os.path.realpath(os.path.join(local_output_dir, member.name))
                     if os.path.commonpath([output_root, target_path]) != output_root:
-                        print(f"Error: Unsafe path in ROSA result archive: {member.name}")
+                        print(f"Error: Unsafe path in result archive: {member.name}")
                         return False
-            if AssertFlags.get("ASSERT_UNPACK") == True:
-                archive.extractall(local_output_dir)
+
+                if AssertFlags.get("ASSERT_UNPACK"):
+                    archive.extractall(local_output_dir)
 
             cleanup_cmd = f"rm -rf {remote_results_dir} {remote_tar_path}"
             _, cleanup_out, cleanup_err = hpc_ssh.exec_command(cleanup_cmd)
             cleanup_status = cleanup_out.channel.recv_exit_status()
             if cleanup_status != 0:
                 cleanup_error = cleanup_err.read().decode('utf-8', errors='replace').strip()
-                print(f"Warning: ROSA results were downloaded, but remote cleanup failed: {cleanup_error}")
+                print(f"Warning: results were downloaded, but remote cleanup failed: {cleanup_error}")
                 return False
 
             total_time = time.time() - start_download_time
             mins, secs = divmod(int(total_time), 60)
-            if AssertFlags.get("ASSERT_UNPACK") == True:
-                print(f"ROSA results downloaded and extracted to: {local_output_dir}")
+            if AssertFlags.get("ASSERT_UNPACK"):
+                print(f"results downloaded and extracted to: {local_output_dir}")
             else:
-                print(f"ROSA results downloaded to: {local_output_dir}")
+                print(f"results downloaded to: {local_output_dir}")
             print(f"Remote workspace scrub complete. Total time: {mins}m:{secs}s")
             return True
         finally:
