@@ -93,6 +93,13 @@ class BoundVariable:
         self.instance = instance
         self.descriptor = descriptor
     @property
+    def name(self):
+        owner = getattr(self.instance, 'name', type(self.instance).__name__)
+        return f"{owner}.{self.descriptor.name}"
+    @property
+    def attribute(self):
+        return self.descriptor.name
+    @property
     def value(self):
         return self.descriptor.fget(self.instance)
     @value.setter

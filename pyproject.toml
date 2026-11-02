@@ -24,6 +24,7 @@ classifiers = [
 dependencies = [
     "numpy>=1.20.0",
     "matplotlib>=3.3.0",
+    "scipy>=1.6.0",
     "paramiko>=2.11.0",
 ]
 

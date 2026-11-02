@@ -2,10 +2,12 @@ import re
 from typing import List, Optional, Tuple, Union
 
 import matplotlib.cm as cm
+from matplotlib.collections import LineCollection
 import matplotlib.colors as mcolors
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+from scipy.interpolate import PchipInterpolator
 
 class EigenValueSpectrumTool:
     def __init__(
@@ -141,6 +143,263 @@ class EigenValueSpectrumTool:
         if self.has_ref_states:
             self._classify_eigenstates()
 
+    def find_anticrossings(
+        self,
+        *,
+        min_gap: float = 0.0,
+        max_gap: Optional[float] = None,
+        min_prominence: float = 0.0,
+        prominence_window: int = 5,
+        min_mixing: Optional[float] = None,
+        mixing_pair: Optional[Tuple[str, str]] = None,
+        x_range: Optional[Tuple[float, float]] = None,
+        energy_range: Optional[Tuple[float, float]] = None,
+    ) -> pd.DataFrame:
+        """Find anticrossings from pairwise mixing peaks when available.
+
+        Mixing and energy values use the units and scales in the input data.
+        ``min_gap`` and ``max_gap`` filter candidates but do not define them.
+        ``min_prominence`` applies to the mixing curve when available, otherwise
+        to the eigenvalue-gap curve.
+        If pairwise mixing data is absent, local eigenvalue-gap minima are used.
+        """
+        if min_gap < 0 or min_prominence < 0:
+            raise ValueError("min_gap and min_prominence must be non-negative")
+        if max_gap is not None and max_gap < min_gap:
+            raise ValueError("max_gap must be greater than or equal to min_gap")
+        if prominence_window < 1:
+            raise ValueError("prominence_window must be at least 1")
+        if min_mixing is not None and not 0 <= min_mixing <= 1:
+            raise ValueError("min_mixing must be between 0 and 1")
+        if (
+            min_mixing is not None
+            and not self.has_pairwise_mix
+            and not self.has_ref_states
+        ):
+            raise ValueError("min_mixing requires mixing-fraction or reference-state data")
+        if mixing_pair is not None and (
+            len(mixing_pair) != 2 or mixing_pair[0] == mixing_pair[1]
+        ):
+            raise ValueError("mixing_pair must contain two distinct reference states")
+        for name, bounds in (("x_range", x_range), ("energy_range", energy_range)):
+            if bounds is not None and bounds[0] > bounds[1]:
+                raise ValueError(f"{name} lower bound must not exceed its upper bound")
+
+        result_columns = [
+            "x",
+            "mixing_state_a",
+            "mixing_state_b",
+            "eigen_index_a",
+            "eigen_index_b",
+            "eigenvalue_a",
+            "eigenvalue_b",
+            "gap",
+            "prominence",
+            "mixing_score",
+        ]
+
+        pair_groups = {}
+        if self.has_pairwise_mix:
+            requested_pair = set(mixing_pair) if mixing_pair is not None else None
+            for _, state_a, state_b, col in self.pairwise_mix_cols:
+                pair_key = frozenset((state_a, state_b))
+                if requested_pair is not None and pair_key != requested_pair:
+                    continue
+                if pair_key not in pair_groups:
+                    pair_groups[pair_key] = {
+                        "states": (state_a, state_b),
+                        "columns": [],
+                    }
+                pair_groups[pair_key]["columns"].append(col)
+            if mixing_pair is not None and not pair_groups:
+                raise ValueError(f"No pairwise mixing data found for {mixing_pair!r}")
+        elif mixing_pair is not None:
+            raise ValueError("mixing_pair requires pairwise mixing data")
+
+        x_values = self.df[self.x_var].to_numpy(dtype=float)
+        finite_x = np.isfinite(x_values)
+        x_values = x_values[finite_x]
+        if x_values.size < 3:
+            return pd.DataFrame(columns=result_columns)
+
+        energies = []
+        eigen_indices = []
+        reference_weights = {}
+        for eigen_index in self.eigen_indices:
+            energy_col = next(
+                (
+                    col
+                    for col in self.df.columns
+                    if re.search(fr"\.lambda{eigen_index}(?!\d)", col)
+                ),
+                None,
+            )
+            if energy_col is not None:
+                energies.append(self.df.loc[finite_x, energy_col].to_numpy(dtype=float))
+                eigen_indices.append(eigen_index)
+
+                reference_cols = {}
+                for col in self.df.columns:
+                    match = re.search(fr"\.ref{eigen_index}\((.*?)\)", col)
+                    if match:
+                        reference_cols[match.group(1)] = col
+                if reference_cols:
+                    reference_weights[eigen_index] = {
+                        state: self.df.loc[finite_x, col].to_numpy(dtype=float)
+                        for state, col in reference_cols.items()
+                    }
+
+        if len(energies) < 2:
+            return pd.DataFrame(columns=result_columns)
+
+        energies = np.column_stack(energies)
+        order = np.argsort(x_values)
+        x_values = x_values[order]
+        energies = energies[order]
+        for weights in reference_weights.values():
+            for state in weights:
+                weights[state] = weights[state][order]
+        if np.any(np.diff(x_values) <= 0):
+            raise ValueError("x values must be unique to find anticrossings")
+
+        candidates = []
+
+        def append_candidate(
+            sample_index: int,
+            energy_index_a: int,
+            energy_index_b: int,
+            prominence: float,
+            mixing_score: float,
+            mixing_states: Tuple[Optional[str], Optional[str]],
+        ) -> None:
+            energy_a = energies[sample_index, energy_index_a]
+            energy_b = energies[sample_index, energy_index_b]
+            gap = abs(energy_a - energy_b)
+            midpoint = (energy_a + energy_b) / 2
+            if gap < min_gap or (max_gap is not None and gap > max_gap):
+                return
+            if x_range is not None and not x_range[0] <= x_values[sample_index] <= x_range[1]:
+                return
+            if energy_range is not None and not energy_range[0] <= midpoint <= energy_range[1]:
+                return
+            if min_mixing is not None and (
+                not np.isfinite(mixing_score) or mixing_score < min_mixing
+            ):
+                return
+
+            candidates.append(
+                {
+                    "x": x_values[sample_index],
+                    "mixing_state_a": mixing_states[0],
+                    "mixing_state_b": mixing_states[1],
+                    "eigen_index_a": eigen_indices[energy_index_a],
+                    "eigen_index_b": eigen_indices[energy_index_b],
+                    "eigenvalue_a": energy_a,
+                    "eigenvalue_b": energy_b,
+                    "gap": gap,
+                    "prominence": prominence,
+                    "mixing_score": mixing_score,
+                }
+            )
+
+        if pair_groups:
+            for pair in pair_groups.values():
+                state_a, state_b = pair["states"]
+                mix_values = self.df.loc[finite_x, pair["columns"]].to_numpy(dtype=float)
+                mix_values = np.max(
+                    np.where(np.isfinite(mix_values), mix_values, -np.inf), axis=1
+                )
+                mix_values[~np.isfinite(mix_values)] = np.nan
+                mix_values = mix_values[order]
+
+                for i in range(1, len(x_values) - 1):
+                    if not (
+                        np.isfinite(mix_values[i - 1 : i + 2]).all()
+                        and mix_values[i] >= mix_values[i - 1]
+                        and mix_values[i] > mix_values[i + 1]
+                    ):
+                        continue
+
+                    mixing_score = mix_values[i]
+                    left = mix_values[max(0, i - prominence_window) : i]
+                    right = mix_values[i + 1 : i + 1 + prominence_window]
+                    left = left[np.isfinite(left)]
+                    right = right[np.isfinite(right)]
+                    if left.size == 0 or right.size == 0:
+                        continue
+                    prominence = mixing_score - max(left.min(), right.min())
+                    if prominence < min_prominence:
+                        continue
+
+                    best_assignment = None
+                    for a in range(len(eigen_indices)):
+                        weights_a = reference_weights.get(eigen_indices[a], {})
+                        state_a_weight = weights_a.get(state_a)
+                        state_b_weight = weights_a.get(state_b)
+                        if state_a_weight is None or state_b_weight is None:
+                            continue
+                        for b in range(a + 1, len(eigen_indices)):
+                            weights_b = reference_weights.get(eigen_indices[b], {})
+                            other_a_weight = weights_b.get(state_a)
+                            other_b_weight = weights_b.get(state_b)
+                            if other_a_weight is None or other_b_weight is None:
+                                continue
+                            assignment_score = (
+                                state_a_weight[i] * other_b_weight[i]
+                                + state_b_weight[i] * other_a_weight[i]
+                            )
+                            if best_assignment is None or assignment_score > best_assignment[0]:
+                                best_assignment = (assignment_score, a, b)
+
+                    if best_assignment is None or best_assignment[0] <= 0:
+                        gaps = np.abs(energies[i, :, None] - energies[i, None, :])
+                        gaps[np.tril_indices_from(gaps)] = np.inf
+                        a, b = np.unravel_index(np.argmin(gaps), gaps.shape)
+                    else:
+                        _, a, b = best_assignment
+
+                    append_candidate(i, a, b, prominence, mixing_score, (state_a, state_b))
+        else:
+            for a in range(len(eigen_indices) - 1):
+                for b in range(a + 1, len(eigen_indices)):
+                    gaps = np.abs(energies[:, a] - energies[:, b])
+                    weights_a = reference_weights.get(eigen_indices[a], {})
+                    weights_b = reference_weights.get(eigen_indices[b], {})
+                    if weights_a and weights_b:
+                        mixing_scores = np.zeros(gaps.shape)
+                        for state in self.ref_states:
+                            if state in weights_a and state in weights_b:
+                                mixing_scores += np.minimum(weights_a[state], weights_b[state])
+                    else:
+                        mixing_scores = np.full(gaps.shape, np.nan)
+
+                    for i in range(1, len(x_values) - 1):
+                        if not (
+                            np.isfinite(gaps[i - 1 : i + 2]).all()
+                            and gaps[i] <= gaps[i - 1]
+                            and gaps[i] < gaps[i + 1]
+                        ):
+                            continue
+                        left = gaps[max(0, i - prominence_window) : i]
+                        right = gaps[i + 1 : i + 1 + prominence_window]
+                        if left.size == 0 or right.size == 0:
+                            continue
+                        prominence = min(left.max(), right.max()) - gaps[i]
+                        if prominence < min_prominence:
+                            continue
+                        append_candidate(
+                            i,
+                            a,
+                            b,
+                            prominence,
+                            mixing_scores[i],
+                            (None, None),
+                        )
+
+        return pd.DataFrame(candidates, columns=result_columns).sort_values(
+            ["x", "gap"], ignore_index=True
+        )
+
     def _setup_colors(self) -> None:
         num_ref = len(self.ref_states)
         if isinstance(self.cmap_input, str):
@@ -153,8 +412,9 @@ class EigenValueSpectrumTool:
         }
         self.color_map["Mixed"] = (0.5, 0.5, 0.5, 0.6)
 
-    def _classify_eigenstates(self) -> None:
-        columns = list(self.df.columns)
+    def _classify_eigenstates(self, data: Optional[pd.DataFrame] = None) -> None:
+        data = self.df if data is None else data
+        columns = list(data.columns)
         for N in self.eigen_indices:
             ref_cols_N = [
                 col
@@ -162,25 +422,70 @@ class EigenValueSpectrumTool:
                 if re.search(fr"\.ref{N}\((.*?)\)", col)
             ]
             if ref_cols_N:
-                max_overlap = self.df[ref_cols_N].max(axis=1)
+                max_overlap = data[ref_cols_N].max(axis=1)
                 max_state = (
-                    self.df[ref_cols_N]
+                    data[ref_cols_N]
                     .idxmax(axis=1)
                     .str.extract(r"\((.*?)\)")[0]
                 )
-                self.df[f"eigen_{N}_label"] = np.where(
+                data[f"eigen_{N}_label"] = np.where(
                     max_overlap >= self.mixing_threshold, max_state, "Mixed"
                 )
             else:
-                self.df[f"eigen_{N}_label"] = "Mixed"
+                data[f"eigen_{N}_label"] = "Mixed"
+
+    def _interpolate_plot_data(self, min_points: Optional[int]) -> pd.DataFrame:
+        if min_points is not None and min_points < 2:
+            raise ValueError("min_points must be at least 2")
+        if min_points is None or len(self.df) >= min_points:
+            return self.df
+
+        x_values = self.df[self.x_var].to_numpy(dtype=float)
+        if not np.isfinite(x_values).all():
+            return self.df
+        order = np.argsort(x_values)
+        x_values = x_values[order]
+        if x_values.size < 2 or np.any(np.diff(x_values) <= 0):
+            return self.df
+
+        additional_count = min_points - len(x_values)
+        candidate_x = np.linspace(x_values[0], x_values[-1], min_points)
+        candidate_x = candidate_x[~np.isin(candidate_x, x_values)]
+        if candidate_x.size > additional_count:
+            selected = np.linspace(
+                0, candidate_x.size - 1, additional_count
+            ).round().astype(int)
+            candidate_x = candidate_x[selected]
+        plot_x = np.sort(np.concatenate((x_values, candidate_x)))
+        plot_columns = {self.x_var: plot_x}
+        for column in self.df.columns:
+            if column == self.x_var or not pd.api.types.is_numeric_dtype(self.df[column]):
+                continue
+            values = self.df[column].to_numpy(dtype=float)[order]
+            finite_values = np.isfinite(values)
+            if finite_values.sum() < 2:
+                continue
+            interpolator = PchipInterpolator(
+                x_values[finite_values], values[finite_values], extrapolate=False
+            )
+            plot_columns[column] = interpolator(plot_x)
+
+        plot_data = pd.DataFrame(plot_columns)
+        if self.has_ref_states:
+            self._classify_eigenstates(plot_data)
+        return plot_data
 
     def plot_spectrum(
         self,
         figsize: Tuple[int, int] = (10, 6),
         title: Optional[str] = None,
+        min_points: Optional[int] = None,
+        show_markers: bool = False,
     ) -> Tuple[plt.Figure, plt.Axes]:
+        """Plot the spectrum, optionally interpolating sparse data for display."""
+        plot_data = self._interpolate_plot_data(min_points)
         fig, ax = plt.subplots(figsize=figsize)
-        columns = list(self.df.columns)
+        columns = list(plot_data.columns)
         for N in self.eigen_indices:
             energy_col = next(
                 (col for col in columns if f".lambda{N}" in col), None
@@ -188,29 +493,54 @@ class EigenValueSpectrumTool:
             if not energy_col:
                 continue
             label_col = f"eigen_{N}_label"
-            if self.has_ref_states and label_col in self.df.columns:
+            if self.has_ref_states and label_col in plot_data.columns:
+                x_values = plot_data[self.x_var].to_numpy()
+                energy_values = plot_data[energy_col].to_numpy()
+                state_values = plot_data[label_col].to_numpy()
+                points = np.column_stack((x_values, energy_values))
+                segments = np.stack((points[:-1], points[1:]), axis=1)
+                segment_labels = state_values[:-1].copy()
+                transitions = state_values[:-1] != state_values[1:]
+                segment_labels[transitions] = "Mixed"
+
+                ax.plot(
+                    x_values,
+                    energy_values,
+                    color="black",
+                    lw=0.45,
+                    alpha=0.25,
+                    zorder=1,
+                )
                 for label, color in self.color_map.items():
-                    mask = self.df[label_col] == label
-                    if mask.any():
+                    segment_mask = segment_labels == label
+                    if segment_mask.any():
+                        ax.add_collection(
+                            LineCollection(
+                                segments[segment_mask],
+                                colors=[color],
+                                linewidths=1.5,
+                                alpha=0.95,
+                                label=label,
+                                zorder=2,
+                            )
+                        )
+                    if show_markers:
+                        mask = state_values == label
+                        if not mask.any():
+                            continue
                         ax.scatter(
-                            self.df.loc[mask, self.x_var],
-                            self.df.loc[mask, energy_col],
+                            x_values[mask],
+                            energy_values[mask],
                             color=color,
-                            s=14,
+                            s=4,
                             label=label,
                             alpha=0.85,
+                            zorder=3,
                         )
-                ax.plot(
-                    self.df[self.x_var],
-                    self.df[energy_col],
-                    color="black",
-                    lw=0.5,
-                    alpha=0.3,
-                )
             else:
                 ax.plot(
-                    self.df[self.x_var],
-                    self.df[energy_col],
+                    plot_data[self.x_var],
+                    plot_data[energy_col],
                     lw=1.5,
                     label=f"$\\lambda_{{{N}}}$",
                 )
@@ -231,7 +561,7 @@ class EigenValueSpectrumTool:
         if title is None:
             title = "Energy Spectrum"
             if self.is_time_dependent and self.time_col:
-                current_time = self.df[self.time_col].iloc[0]
+                current_time = plot_data[self.time_col].iloc[0]
                 title += f" ({self.time_col} = {current_time})"
         ax.set_title(title, fontweight="bold")
         ax.grid(True, linestyle="--", alpha=0.5)

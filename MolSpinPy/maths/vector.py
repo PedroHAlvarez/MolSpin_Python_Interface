@@ -57,6 +57,9 @@ class Vector:
     def __str__(self):
         v = self.value
         return f"{v[0]:.6f} {v[1]:.6f} {v[2]:.6f}"
+
+    def render_to_string(self):
+        return f"{self.__str__()}"
     
     def multiply(self, other):
         return_vec = Vector("")

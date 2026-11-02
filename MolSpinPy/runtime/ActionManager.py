@@ -35,6 +35,8 @@ class ActionManager:
             self._actions.sort(key=lambda x: x.effective_priority, reverse=False)
         if not self._is_tested:
             self.test_all()
+        if dry:
+            step_map = {}
         for action in self._actions:
             action.step(current_step)
             self._registry[action.name].append({
@@ -43,8 +45,11 @@ class ActionManager:
             })
             if(dry):
                 print(rf"{action.name}: {current_step}: {action.value}")
+                step_map[action.name] = action.value
         if current_step % self._buffer == 0 and current_step > 0:
             self.flush()
+        if dry:
+            return step_map
     def _verify_relationships(self):
         has_warnings = False
         for target,action_idx in self.registered_actions.items():

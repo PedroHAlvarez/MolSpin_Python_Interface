@@ -1,4 +1,5 @@
 from . import ActionVariable
+from MolSpinPy.utility import code_capture
 from MolSpinPy.utility import imported
 import inspect
 from functools import wraps
@@ -9,6 +10,29 @@ from types import SimpleNamespace
 
 class ActionFunction:
     metadata_note = None
+
+    def __init_subclass__(cls, **kwargs):
+        super().__init_subclass__(**kwargs)
+        init = cls.__dict__.get('__init__')
+        if init is None:
+            return
+
+        # Record the constructor arguments (outermost constructor only) so the
+        # function can be described in the project metadata.
+        @wraps(init)
+        def recording_init(self, *args, **kw):
+            first = '_init_config' not in self.__dict__
+            if first:
+                try:
+                    bound = inspect.signature(init).bind(self, *args, **kw)
+                    bound.apply_defaults()
+                    config = dict(bound.arguments)
+                    config.pop('self', None)
+                except TypeError:
+                    config = {}
+                object.__setattr__(self, '_init_config', config)
+            init(self, *args, **kw)
+        cls.__init__ = recording_init
 
     def __init__(self):
         #required parameters
@@ -63,7 +87,7 @@ class ActionFunction:
             raise TypeError("State must be a dictionary or a SimpleNamespace.")
         
     def __metadata__(self):
-        raise NotImplementedError("Sub classes should implement their own __metadata__ function")
+        return self.metadata_note
     
 class CustomActionFunction(ActionFunction):
     def __init__(self, func = None):
@@ -118,8 +142,17 @@ class CustomActionFunction(ActionFunction):
         return True & verified
     
     def _verify_function_utility(self, func):
-        source = inspect.getsource(func)
+        try:
+            source = inspect.getsource(func)
+            self._dependencies = code_capture.capture_dependencies(func)
+        except (OSError, TypeError):
+            # Functions restored from metadata have no file to read the source from.
+            source = getattr(func, "__molspin_source__", None)
+            if source is None:
+                raise
+            self._dependencies = list(getattr(func, "__molspin_dependencies__", []))
         source = textwrap.dedent(source)
+        self._source = source
         tree = ast.parse(source)
         has_return = False
         modifies_var = False

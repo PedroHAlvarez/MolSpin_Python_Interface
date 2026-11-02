@@ -19,3 +19,5 @@ resonance_frequency_scan.py
 *.md
 *.egg-info
 *.txt
+*pklMolSpinPy/resources/permitted_modules.json
+metadata_test_output/*

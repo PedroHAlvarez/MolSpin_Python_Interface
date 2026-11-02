@@ -21,7 +21,7 @@ class LineSpaceScalar(ActionFunction.ActionFunction):
             state.index += 1
             return val
         return var.value
-    def DoStep(self, var):
+    def DoStep(self, var, action_id=None):
         val = self.LineSpaceScalerLogic(self._step, var, self._state, self.sequence)
         self._step += 1
         #print(val)
@@ -55,7 +55,7 @@ class LineSpaceVector(ActionFunction.ActionFunction):
             val = self._direction.multiply(val)
             return val.value
         return var.value
-    def DoStep(self, var):
+    def DoStep(self, var, action_id=None):
         val = self.LineSpaceVectorLogic(self._step, var, self._state, self.sequence)
         self._step += 1
         #print(val)
