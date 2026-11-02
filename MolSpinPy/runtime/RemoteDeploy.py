@@ -259,11 +259,13 @@ fi
             #remote_file_path = f"{remote_results_dir}/{filename}"
             #template.render_to_file_ssh(snapshot,remote_file_path,sftp)
 
-        template, sweep_data = compressor.build_payloads()
-        MsdHandling.writeLocal(template, sweep_data, f"{project_name}_hpc.jsonl")
-        MsdHandling.writeLocalCompressed(template, sweep_data, f"{project_name}_hpc.jsonl.gz")
-        sftp.put(f"{project_name}_hpc.jsonl.gz",f"{remote_results_dir}/{project_name}_hpc.jsonl.gz")
-        os.remove(f"{project_name}_hpc.jsonl.gz")
+        template, defaults, sweep_data = compressor.build_payloads()
+        manifest = f"{project_name}_hpc.jsonl.gz"
+        MsdHandling.writeIndexedCompressed(template, defaults, sweep_data, manifest)
+        sftp.put(manifest, f"{remote_results_dir}/{manifest}")
+        sftp.put(manifest + ".idx", f"{remote_results_dir}/{manifest}.idx")
+        os.remove(manifest)
+        os.remove(manifest + ".idx")
         package_root = os.path.join(os.path.dirname(os.path.abspath(__file__)),"hpc_worker.py")
         sftp.put(package_root, f"{remote_results_dir}/hpc_worker.py")
 

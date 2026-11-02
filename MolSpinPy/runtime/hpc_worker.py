@@ -50,8 +50,25 @@ def reconstruct(manifest_path, task_idx, output_dir, gzip_file = True):
 
     master_template = None
     target_params = None
+    defaults = {}
+    idx_path = manifest_path + ".idx"
 
-    if(gzip_file):
+    if gzip_file and os.path.exists(idx_path):
+        # Indexed manifest: decompress only the header and the one chunk needed.
+        with open(idx_path, "r", encoding="utf-8") as f:
+            index = json.load(f)
+        row = task_idx - 1
+        if 0 <= row < index["rows"]:
+            with open(manifest_path, "rb") as raw:
+                header = json.loads(gzip.GzipFile(fileobj=raw).readline().decode("utf-8"))
+                master_template = header["content"]
+                defaults = header.get("defaults", {})
+                raw.seek(index["offsets"][row // index["chunk_size"]])
+                chunk = gzip.GzipFile(fileobj=raw)
+                for _ in range(row % index["chunk_size"]):
+                    chunk.readline()
+                target_params = json.loads(chunk.readline().decode("utf-8"))["params"]
+    elif(gzip_file):
         with gzip.open(manifest_path, "rt", encoding="utf-8") as f:
             first_line = f.readline()
             if not first_line:
@@ -85,6 +102,7 @@ def reconstruct(manifest_path, task_idx, output_dir, gzip_file = True):
     if target_params is None:
         print(f"Error: Task index {task_idx} out of bounds for manifest.", file=sys.stderr)
         sys.exit(1)
+    target_params = {**defaults, **target_params}
     escaped_template = master_template.replace("{", "{{").replace("}","}}")
     for key in target_params.keys():
         place_holder = f"{{{key}}}"
