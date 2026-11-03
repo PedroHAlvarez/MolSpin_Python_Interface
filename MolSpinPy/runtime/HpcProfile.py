@@ -6,10 +6,70 @@ names or per-cluster branches. To support a new cluster, build a profile and
 either register it (``HpcProfile.register(profile)``, then use
 ``cluster_profile="name"``) or pass the instance directly as ``cluster_profile``
 to ``Project.LoadHPC`` / ``Project.SubmitToHPC``.
+
+``HpcProfile.register(profile, remember=True)`` also saves the profile to a
+per-installation ``hpc_profiles.json`` inside the installed MolSpinPy package
+(override with the ``MOLSPINPY_HPC_PROFILES`` environment variable), so it is
+available in every later script on that machine. Manage with
+``HpcProfile.saved()`` and ``HpcProfile.forget(name)``. Reinstalling or
+upgrading the package may wipe the file.
 """
 
-from dataclasses import dataclass, field, replace
+import json
+import os
+import warnings
+from dataclasses import asdict, dataclass, field, fields, replace
+from pathlib import Path
 from typing import Dict, Tuple, Union
+
+HPC_PROFILES_ENV = "MOLSPINPY_HPC_PROFILES"
+
+
+def hpc_profiles_path():
+    override = os.environ.get(HPC_PROFILES_ENV)
+    if override:
+        return Path(override)
+    return Path(__file__).resolve().parent.parent / "resources" / "hpc_profiles.json"
+
+
+def _read_store():
+    path = hpc_profiles_path()
+    try:
+        with open(path, "r", encoding="utf-8") as handle:
+            data = json.load(handle)
+        profiles = data.get("hpc_profiles", {}) if isinstance(data, dict) else {}
+        return {k.lower(): v for k, v in profiles.items() if isinstance(v, dict)}
+    except FileNotFoundError:
+        return {}
+    except (OSError, ValueError) as exc:
+        warnings.warn(f"Ignoring unreadable HPC profile store '{path}': {exc}", RuntimeWarning, stacklevel=3)
+        return {}
+
+
+def _write_store(profiles):
+    path = hpc_profiles_path()
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with open(path, "w", encoding="utf-8") as handle:
+            json.dump({"hpc_profiles": profiles}, handle, indent=2)
+        return True
+    except OSError as exc:
+        warnings.warn(
+            f"Could not save HPC profiles to '{path}' ({exc}); the profile applies to this process only. "
+            f"Set {HPC_PROFILES_ENV} to a writable file to keep it.",
+            RuntimeWarning, stacklevel=3,
+        )
+        return False
+
+
+def _load_saved_profiles():
+    for key, data in _read_store().items():
+        if key in HpcProfile._builtin:
+            continue
+        try:
+            HpcProfile._registry[key] = HpcProfile.from_dict(data)
+        except (TypeError, ValueError) as exc:
+            warnings.warn(f"Skipping invalid saved HPC profile '{key}': {exc}", RuntimeWarning, stacklevel=2)
 
 
 @dataclass(frozen=True)
@@ -71,6 +131,7 @@ class HpcProfile:
     metadata_extra: Dict[str, str] = field(default_factory=dict)
 
     _registry = {}
+    _builtin = frozenset({"gwdg", "rosa"})
 
     def with_overrides(self, **overrides):
         return replace(self, **overrides)
@@ -83,10 +144,53 @@ class HpcProfile:
             sections.append(f"source {remote_binary_path}/{self.venv_subpath}/bin/activate")
         return "\n\n".join(sections)
 
+    def to_dict(self):
+        data = asdict(self)
+        for key in ("runtime_modules", "build_modules", "build_make_args", "venv_packages"):
+            data[key] = list(data[key])
+        return data
+
     @classmethod
-    def register(cls, profile):
+    def from_dict(cls, data):
+        known = {f.name for f in fields(cls)}
+        kwargs = {k: v for k, v in data.items() if k in known}
+        for key in ("runtime_modules", "build_modules", "build_make_args", "venv_packages"):
+            if key in kwargs:
+                kwargs[key] = tuple(kwargs[key])
+        return cls(**kwargs)
+
+    @classmethod
+    def register(cls, profile, remember=False):
+        """Register a profile for this process. With ``remember=True`` it is also saved to the
+        per-installation store (``hpc_profiles.json``) and loaded automatically in future scripts.
+        Built-in profiles cannot be remembered."""
         cls._registry[profile.name.lower()] = profile
+        if remember:
+            key = profile.name.lower()
+            if key in cls._builtin:
+                raise ValueError(f"'{profile.name}' is a built-in profile name and cannot be remembered.")
+            saved = _read_store()
+            saved[key] = profile.to_dict()
+            _write_store(saved)
         return profile
+
+    @classmethod
+    def forget(cls, name):
+        """Remove a remembered profile from the store and from this process. Returns True if it existed."""
+        key = name.lower()
+        if key in cls._builtin:
+            raise ValueError(f"'{name}' is a built-in profile and cannot be removed.")
+        saved = _read_store()
+        existed = saved.pop(key, None) is not None
+        if existed:
+            _write_store(saved)
+        cls._registry.pop(key, None)
+        return existed
+
+    @classmethod
+    def saved(cls):
+        """Names of profiles remembered on this installation."""
+        return sorted(_read_store())
 
     @classmethod
     def available(cls):
@@ -129,3 +233,5 @@ HpcProfile.register(HpcProfile(
     build_make_args=("ARCHFLAGS=", "LOOPFLAGS="),
     metadata_extra={"cluster_profile": "rosa"},
 ))
+
+_load_saved_profiles()

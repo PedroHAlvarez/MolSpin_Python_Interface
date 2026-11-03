@@ -1,0 +1,566 @@
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{geometry}
+\usepackage{xcolor}
+\usepackage{listings}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{enumitem}
+\usepackage{hyperref}
+
+\geometry{margin=25mm}
+\hypersetup{
+  colorlinks=true,
+  linkcolor=blue,
+  urlcolor=blue,
+  pdftitle={MolSpinPy Manual},
+  pdfauthor={MolSpinPy contributors}
+}
+
+\definecolor{codebg}{RGB}{247,248,250}
+\definecolor{codeframe}{RGB}{210,215,220}
+\lstset{
+  language=Python,
+  basicstyle=\ttfamily\small,
+  keywordstyle=\color{blue!65!black},
+  commentstyle=\color{green!40!black},
+  stringstyle=\color{red!55!black},
+  backgroundcolor=\color{codebg},
+  frame=single,
+  rulecolor=\color{codeframe},
+  breaklines=true,
+  breakatwhitespace=false,
+  showstringspaces=false,
+  keepspaces=true,
+  columns=fullflexible,
+  tabsize=4
+}
+
+\title{\textbf{MolSpinPy}\\Manual for version 0.1.0}
+\author{Python interface for MolSpin}
+\date{Version 0.1.0}
+
+\begin{document}
+\maketitle
+\tableofcontents
+\newpage
+
+\section{About this manual}
+
+MolSpinPy provides Python objects and utilities for preparing MolSpin input,
+generating parameter sweeps, running calculations, deploying work to supported
+Slurm clusters, and exploring result data. This manual describes the
+implementation identified as version 0.1.0 in the project package metadata.
+It is based on the code currently in the repository; the release should be
+treated as an early, evolving interface.
+
+MolSpinPy prepares input and coordinates execution; it does not replace the
+MolSpin simulation program. A usable MolSpin executable or a configured remote
+installation is needed to perform simulations.
+
+\section{Installation and compatibility}
+
+The package metadata declares Python 3.8 or newer and the following runtime
+dependencies: NumPy, Matplotlib, SciPy, and Paramiko. From the repository root,
+install the package with:
+
+\begin{lstlisting}
+python -m pip install .
+\end{lstlisting}
+
+For development tools, install the optional development dependencies with:
+
+\begin{lstlisting}
+python -m pip install ".[dev]"
+\end{lstlisting}
+
+\subsection{Packaging notes for 0.1.0}
+
+There are differences between the declared installation requirements and
+imports in the current source:
+\begin{itemize}[nosep]
+  \item \texttt{MolSpinPy.processing.EigenValueSpectrumTool} imports pandas,
+        but pandas is not listed in the package dependencies.
+  \item The package initialization imports \texttt{typing\_extensions}, which
+        is also not listed as a direct dependency.
+  \item The setuptools configuration explicitly lists only the top-level
+        \texttt{MolSpinPy} package, not its subpackages. Check the installed
+        distribution contains \texttt{objects}, \texttt{runtime}, and the
+        other subpackages; an editable install or running from the repository
+        root may be needed with this packaging configuration.
+  \item The source contains a Python 3.10-style union annotation in the
+        rotation actions. Although the package metadata says Python 3.8+,
+        Python 3.10 or newer is the practical choice for this version.
+\end{itemize}
+If importing the package fails because of a missing module, install the
+corresponding dependency in the active environment. For example:
+
+\begin{lstlisting}
+python -m pip install pandas typing_extensions
+\end{lstlisting}
+
+\section{Core concepts}
+
+\begin{description}[style=nextline]
+  \item[MSD input] A MolSpin data file. The parser converts it into nested
+        Python dictionaries that can be inspected or modified.
+  \item[Project] Owns the base input, the selected MSD template, optional
+        object-built spin systems, settings, tasks, an action manager, and
+        local or remote execution state.
+  \item[Action] Couples a target variable to an action function and optional
+        timing, sequence, and parent-child settings.
+  \item[ActionManager] Registers, orders, tests, and applies actions at each
+        sweep step.
+  \item[Template] Turns a dictionary snapshot into a MolSpin \texttt{.msd}
+        input file. The default is \texttt{BasicTemplate.msd}.
+  \item[Project metadata] JSON and Markdown records of the input, template,
+        action setup, environment, and execution information.
+\end{description}
+
+A typical parameter-sweep workflow is:
+\begin{enumerate}[nosep]
+  \item Read an MSD input or assemble a project with Python objects.
+  \item Create an \texttt{ActionManager} and add actions for variables to
+        change.
+  \item Render a new MSD input for each sweep step.
+  \item Run the generated input with MolSpin locally or submit the sweep to
+        a configured HPC cluster.
+  \item Process result files and plot selected quantities.
+\end{enumerate}
+
+\section{Reading and rendering MSD input}
+
+\subsection{Load an existing input file}
+
+\texttt{ConvertMSDtoDictionary} parses MolSpin blocks into a dictionary with
+top-level sections for \texttt{spinsystems}, \texttt{settings},
+\texttt{actions}, \texttt{outputs}, and \texttt{tasks}. The parser accepts
+line comments beginning with \texttt{//}, braces for blocks, and semicolon
+terminated assignments. It tracks original case while normalizing lookup
+keys for parsing.
+
+\begin{lstlisting}
+import MolSpinPy as msp
+
+input_data = msp.msd.MsdHandling.ConvertMSDtoDictionary(
+    "base_inputfile.msd"
+)
+if input_data is None:
+    raise FileNotFoundError("Could not read the MSD input file")
+
+project = msp.runtime.Project("example")
+project.attach_dict(input_data)
+\end{lstlisting}
+
+An MSD file can also be attached directly with
+\texttt{project.attach\_MSD\_file(filename)}. To add a dictionary to an
+already populated project, \texttt{attach\_dict} accepts
+\texttt{dictMode.CONCATINATE} from
+\texttt{MolSpinPy.runtime.Project}; otherwise the default mode replaces the
+base dictionary. The project validates input structure against its template
+before attaching it.
+
+\subsection{The default input shape}
+
+The built-in template expects the following principal sections:
+
+\begin{lstlisting}
+{
+    "spinsystems": {
+        "system_name": {
+            "spins": {},
+            "interactions": {},
+            "states": {},
+            "transitions": {},
+            "properties": {},
+            "pulses": {},
+            "operators": {}
+        }
+    },
+    "settings": {},
+    "actions": {},
+    "outputs": {},
+    "tasks": {}
+}
+\end{lstlisting}
+
+The template renders spin systems, spins, interactions, states, transitions,
+properties, pulses, operators, settings, outputs, and run tasks when those
+sections are present. The alternative \texttt{BasicTemplate\_withActions.msd}
+also renders actions and pulse sequences. MolSpin-specific block names,
+property names, units, and valid task types must follow the MolSpin program's
+input requirements.
+
+\subsection{Render a single input file}
+
+The template can be used independently of the project deployment pipeline.
+This is useful for inspecting generated input or validating the rendered
+configuration before a large run.
+
+\begin{lstlisting}
+from pathlib import Path
+
+template = msp.msd.FileTemplate.get_template("BasicTemplate.msd")
+rendered = template.render(input_data)
+Path("preview.msd").write_text(rendered, encoding="utf-8")
+\end{lstlisting}
+
+Custom templates can be loaded with
+\texttt{msp.msd.FileTemplate.get\_template(filename, folder=...)}. Template
+syntax supports variable substitutions, \texttt{if}/\texttt{elif}/
+\texttt{else} conditions, and loops over dictionary entries. Template
+resources are packaged under \texttt{MolSpinPy/resources/templates}.
+
+\section{Building models with Python objects}
+
+The object API is available under \texttt{msp.objects}. A spin system can
+contain electron and nuclear spins, interactions, states, transitions, and
+properties. The supported interaction classes include Zeeman, zero-field
+splitting, hyperfine, dipolar, and exchange interactions.
+
+\begin{lstlisting}
+from MolSpinPy.maths.vector import Vector
+
+system = msp.objects.spin_system.SpinSystem("GS")
+electron = system.add_electron(
+    msp.objects.spin_object.Electron("e1")
+)
+nucleus = system.add_nucleus(
+    msp.objects.spin_object.Nucleus("n1")
+)
+
+system.add_interaction(
+    msp.objects.interactions.Zeeman_Interaction(
+        "field", electron, Vector("0 0 1")
+    )
+)
+system.add_interaction(
+    msp.objects.interactions.Hyperfine_Interaction(
+        "hf", electron, nucleus,
+        msp.maths.tensor.Isotropic("1.0")
+    )
+)
+system.add_state(msp.objects.State("initial", {electron: 1, nucleus: 1}))
+system.set_property("initialstate", "initial")
+
+project = msp.runtime.Project("object_model")
+project.add_spin_system(system)
+project.set_settings(msp.objects.Settings("general", steps=20))
+\end{lstlisting}
+
+The spin indices passed to \texttt{State} are resolved using each spin's
+index mapping. A state may also be supplied as raw MolSpin text using
+\texttt{State.from\_text}. Nuclei can cause state definitions to be expanded
+into nuclear permutations when states are added to a spin system.
+
+\texttt{Settings(name, steps=1, **properties)} creates a general settings
+block. \texttt{Task(name, type, **properties)} creates a run task; the type
+and properties must be valid for the MolSpin executable. Use
+\texttt{project.add\_task(task)} to include it in the project.
+
+\section{Actions and parameter sweeps}
+
+\subsection{Binding an action}
+
+An action can target a dictionary variable with a dotted key path, or a
+property on a Python object. Dictionary-bound action keys are resolved
+case-insensitively. The following example is based on the checked-in
+nitrogen-vacancy strain-relaxation example and expects the corresponding MSD
+file to contain the named interaction properties.
+
+\begin{lstlisting}
+import math
+import MolSpinPy as msp
+
+input_data = msp.msd.MsdHandling.ConvertMSDtoDictionary(
+    "NV_centre_N14_strain_relaxation.msd"
+)
+if input_data is None:
+    raise FileNotFoundError("Could not read the NV MSD input")
+
+manager = msp.runtime.ActionManager()
+project = msp.runtime.Project("NV_sweep")
+project.attach_dict(input_data)
+project.attach_ActionManager(manager)
+
+shear = 1 / math.sqrt(2)
+direction = msp.maths.list.List(
+    f"1 1 1 {shear:.6f} {shear:.6f} {shear:.6f}"
+)
+
+function = msp.objects.Actions.LogSpaceList(
+    start=1e-5,
+    stop=1e-3,
+    num=100,
+    direction=direction,
+    Normalize=False,
+    Exponent=False,
+    length=6,
+)
+action = msp.objects.Action(
+    input_data,
+    function,
+    duration=100,
+    loop=True,
+    key="spinsystems.GS.interactions.strain.E",
+)
+manager.add_action(action)
+\end{lstlisting}
+
+The \texttt{Action} constructor accepts timing options including
+\texttt{duration}, \texttt{start}, \texttt{interval}, \texttt{loop}, and
+\texttt{active}; an optional \texttt{parent} creates a dependent action.
+Actions are tested when first run and then applied in priority order. Action
+functions update the bound value on each applicable step.
+
+\subsection{Built-in action functions}
+
+The built-in action package currently exports:
+\begin{itemize}[nosep]
+  \item \texttt{LineSpaceScalar} and \texttt{LineSpaceVector};
+  \item \texttt{LogSpaceScalar}, \texttt{LogSpaceVector}, and
+        \texttt{LogSpaceList};
+  \item \texttt{FibonacciSphere} and \texttt{RotateVector}.
+\end{itemize}
+
+The line- and log-space functions generate numeric sequences. Vector and
+list variants multiply the sequence by a direction; their normalization
+options default to true where supported. The log-space functions accept
+\texttt{Exponent=False} when \texttt{start} and \texttt{stop} are values
+rather than base exponents. \texttt{RotateVector} rotates a three-dimensional
+bound value using a rotation axis and angle.
+
+\subsection{Custom action scripts}
+
+Decorate a Python function with \texttt{msp.objects.ActionScript}. It receives
+the current local step, bound variable, and action state when those arguments
+are present in its signature. It must return a replacement value or modify
+\texttt{var.value}.
+
+\begin{lstlisting}
+@msp.objects.ActionScript
+def scale_value(step, var, state, factor=2.0):
+    return var.value * factor
+
+scale_action = msp.objects.Action(
+    input_data,
+    scale_value,
+    key="spinsystems.GS.interactions.strain.E",
+    factor=2.0,
+)
+manager.add_action(scale_action)
+\end{lstlisting}
+
+The decorated function's extra arguments become action parameters. An
+\texttt{ActionManager} can also attach actions to object-bound variables,
+for example \texttt{electron.spin} or a supported interaction property.
+Object-bound actions are recorded only when the target object belongs to a
+spin system attached to the project.
+
+\section{Local generation and execution}
+
+\texttt{Project.Deploy()} is the intended combined workflow for generating
+per-step MSD files, writing metadata, and optionally running a local MolSpin
+binary. The binary can be found through the \texttt{molspin} argument,
+\texttt{MOLSPIN\_PATH} or \texttt{MOLSPIN\_HOME}, the system path, or common
+checkout folders. Additional options include \texttt{steps},
+\texttt{max\_processes}, and \texttt{NPZ}.
+
+\begin{lstlisting}
+project.Deploy(molspin=r"C:\path\to\molspin.exe")
+\end{lstlisting}
+
+\subsection{Output handling}
+
+The local deployment creates \texttt{outputs/<project-name>/}. If that
+project-specific directory already exists, it is removed and recreated;
+directories for other project names are not removed. Preserve any previous
+results for the same project name before deploying again. The
+\texttt{AssertFlags} options can disable binary lookup or MolSpin execution
+while retaining input generation and integrity verification. For inspecting
+one rendered input independently, use \texttt{FileTemplate.render} as shown
+earlier.
+
+On a successful local run, logs are placed in
+\texttt{molspin\_logs/}, task data in \texttt{molspin\_results/}, and, when
+\texttt{NPZ=True}, converted archives in \texttt{molspin\_npz/}.
+
+\section{HPC deployment}
+
+Remote deployment uses SSH/SFTP through Paramiko and submits Slurm jobs. You
+need an SSH username, host, private-key path, remote working directory, and a
+MolSpin checkout or executable on the cluster. A proxy host may be supplied
+when required by the cluster's SSH configuration.
+
+\begin{lstlisting}
+project.LoadHPC(
+    hpc_username="user",
+    hpc_host="cluster.example.org",
+    hpc_key_path="~/.ssh/id_ed25519",
+    remote_working_dir="/home/user/molspin-runs",
+    cluster_profile="gwdg",
+)
+
+job_ids = project.SubmitToHPC(
+    hpc_username="user",
+    hpc_host="cluster.example.org",
+    hpc_key_path="~/.ssh/id_ed25519",
+    remote_binary_path="/home/user/MolSpin",
+    remote_working_dir="/home/user/molspin-runs",
+    partition="standard96",
+    walltime="01:00:00",
+    max_concurrent=20,
+    max_nodes=10,
+)
+project.WatchHPC(job_ids)
+\end{lstlisting}
+
+\texttt{SubmitToHPC} also accepts the cluster profile and optional scheduling
+settings. Built-in profiles are:
+\begin{center}
+\begin{tabularx}{\linewidth}{l l X}
+\toprule
+Profile & Default partition & Notes \\
+\midrule
+\texttt{gwdg} & \texttt{standard96} & Uses a manually installed Armadillo
+path and a Python virtual environment. \\
+\texttt{rosa} & \texttt{rosa.p} & Loads cluster modules for Armadillo and
+SciPy; applies make flag overrides. \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+Profiles can be registered or customized with
+\texttt{HpcProfile.register} and \texttt{HpcProfile.with\_overrides}.
+Calling \texttt{HpcProfile.register(profile, remember=True)} also saves the
+profile to \texttt{hpc\_profiles.json} inside the installed MolSpinPy package
+(override the location with the \texttt{MOLSPINPY\_HPC\_PROFILES} environment
+variable), so it is loaded automatically in every later script on that
+machine. \texttt{HpcProfile.saved()} lists remembered profiles and
+\texttt{HpcProfile.forget(name)} removes one. Built-in profiles cannot be
+remembered or removed, and reinstalling or upgrading the package may wipe the
+file. Use
+\texttt{InstallBinary} to clone and build MolSpin at a new remote location,
+or \texttt{UpdateBinary} to synchronize and rebuild an existing checkout.
+With the default Git assertion enabled, updating may reset the remote checkout
+to its upstream branch and remove untracked files. Review the remote checkout
+before using this operation.
+
+Remote submissions recreate the project's remote workspace directory.
+Consequently, a subsequent submission for the same project name and working
+directory may replace the earlier workspace. Preserve needed results before
+resubmitting. Use \texttt{DownloadFromHPC} to retrieve a completed job's
+results; optional email and cluster-specific module settings are also
+supported by the deployment implementation. Downloading results also
+removes the remote project workspace and its archive after a successful
+transfer, so do not rely on that workspace as a long-term backup.
+
+\section{Metadata and project restoration}
+
+Metadata generation is enabled by default. Local deployment writes a JSON
+record and a readable Markdown record alongside the generated files. The
+record includes the base input, template source, settings, action tree,
+function configuration, and execution details.
+
+\texttt{ProjectLoader} reconstructs a project from a metadata JSON file or a
+dictionary. Built-in action functions can be restored without executing
+custom code. Custom \texttt{ActionScript} source is executable content and is
+disabled by default:
+
+\begin{lstlisting}
+loader = msp.runtime.ProjectLoader(
+    "outputs/project/project_metadata.json",
+    allow_code=True,
+)
+restored_project = loader.build()
+\end{lstlisting}
+
+Only load metadata from a trusted source when enabling \texttt{allow\_code}.
+Modules outside the built-in allow-list are refused unless explicitly
+permitted with \texttt{allow\_modules}. The loader verifies recorded hashes
+for custom source and dependencies; hash verification is not a substitute for
+reviewing code before executing it.
+
+\section{Processing results}
+
+\subsection{Converting MolSpin data files}
+
+\texttt{ProcessSingleFile(filename, output\_dir)} reads a whitespace-delimited
+data file whose first row contains column names, then saves an NPZ archive
+with parsed columns. This is used by local or downloaded-result workflows
+when NPZ conversion is enabled.
+
+\subsection{Time evolution plots}
+
+\texttt{TimeEvolutionTool} accepts an NPZ file path or a dictionary of
+NumPy arrays. It locates a time column and state/population arrays, then
+provides line and stacked-area plots.
+
+\begin{lstlisting}
+tool = msp.processing.TimeEvolutionTool(
+    "results.npz",
+    time_key="time(ns)",
+)
+figure, axes = tool.plot_evolution()
+figure.savefig("time-evolution.png", dpi=160)
+\end{lstlisting}
+
+When data are in a project workspace, a project can be passed to the tool to
+resolve local or HPC result paths. The optional time key, state key(s), labels,
+and cache directory can be specified when the file's column names require
+explicit selection.
+
+\subsection{Eigenvalue spectra}
+
+\texttt{EigenValueSpectrumTool} accepts a whitespace-delimited file path or a
+pandas DataFrame. It recognizes eigenvalue columns named with
+\texttt{.lambdaN}, reference-state fractions named with \texttt{.refN(state)},
+and pairwise mixing columns named \texttt{RefMix(a,b)} or
+\texttt{EigenMix(a,b)}. Its public analysis methods include
+\texttt{plot\_spectrum}, \texttt{plot\_mixing\_fractions}, and
+\texttt{find\_anticrossings}. Values and thresholds use the units and scales
+in the input data.
+
+\section{Troubleshooting}
+
+\begin{description}[style=nextline]
+  \item[MSD file not found] Check the current working directory or pass an
+        absolute path. The parser returns \texttt{None} for a missing file.
+  \item[Invalid action key] Confirm the dot-separated path exists in the
+        parsed dictionary. Use dictionary keys from the input file; key
+        matching is case-insensitive.
+  \item[Action type or shape error] Check the value type and dimensions of
+        the action result against its target. Actions are tested by the
+        manager before the first normal step.
+  \item[MolSpin executable not found] Pass the executable or installation
+        directory through \texttt{Deploy(molspin=...)}, set
+        \texttt{MOLSPIN\_PATH}, or add MolSpin to \texttt{PATH}.
+  \item[Custom action refused by the loader] Set \texttt{allow\_code=True}
+        only after reviewing the metadata source, and explicitly permit any
+        required external modules.
+  \item[Local deployment verification fails] This is a known 0.1.0 output
+        path mismatch described in the local deployment section.
+\end{description}
+
+\section{Public module map}
+
+\begin{center}
+\begin{tabularx}{\linewidth}{l X}
+\toprule
+Module & Main purpose \\
+\midrule
+\texttt{msp.msd} & MSD parsing, templates, rendering, and data conversion. \\
+\texttt{msp.objects} & Spin models, actions, states, transitions, settings,
+and tasks. \\
+\texttt{msp.maths} & Vector, list, and tensor representations. \\
+\texttt{msp.runtime} & Projects, action management, HPC profiles, and
+metadata loading. \\
+\texttt{msp.processing} & Time-evolution and eigenvalue-spectrum processing. \\
+\texttt{msp.utility} & Runtime flags and supporting utilities. \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+\end{document}
