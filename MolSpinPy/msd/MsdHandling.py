@@ -78,6 +78,8 @@ class SequentialSweepCompressor:
             for i in self.variable_indices
         }
         rows = [{f"line_{i}": v for i, v in d.items()} for d in self.sweep_deltas]
+        # Row 0 is the baseline file, so it carries the full baseline values.
+        rows[0] = dict(defaults)
         return master_template, defaults, rows
 
 #depricate heavy memory function
