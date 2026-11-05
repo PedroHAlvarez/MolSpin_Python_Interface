@@ -1,0 +1,1769 @@
+{
+  "verified": true,
+  "source_root": "",
+  "tasks": {
+    "HSGeneral": {
+      "type": "HSGeneral",
+      "aliases": [
+        "hsgeneral",
+        "HSGeneral",
+        "hs-general",
+        "HS-General"
+      ],
+      "properties": {
+        "dynamics": {
+          "name": "dynamics",
+          "aliases": [
+            "timedependence",
+            "time_dependence"
+          ],
+          "value_type": "string",
+          "default": "static",
+          "choices": [
+            "static",
+            "dynamic"
+          ],
+          "required": false,
+          "description": "",
+          "source": "RunSection/General/HS/HSExecutionPlan.cpp:96"
+        },
+        "calculation": {
+          "name": "calculation",
+          "aliases": [
+            "calculationmode",
+            "calculation_mode"
+          ],
+          "value_type": "string",
+          "default": "timeevolution",
+          "choices": [
+            "timeevolution",
+            "yields"
+          ],
+          "required": false,
+          "description": "",
+          "source": "RunSection/General/HS/HSExecutionPlan.cpp:104"
+        },
+        "sampling": {
+          "name": "sampling",
+          "aliases": [
+            "tracesampling",
+            "trace_sampling"
+          ],
+          "value_type": "string",
+          "default": "direct",
+          "choices": [
+            "direct",
+            "stochastic"
+          ],
+          "required": false,
+          "description": "",
+          "source": "RunSection/General/HS/HSExecutionPlan.cpp:117"
+        },
+        "approximation": {
+          "name": "approximation",
+          "aliases": [
+            "hamiltonianapproximation",
+            "hamiltonian_approximation"
+          ],
+          "value_type": "string",
+          "default": "full",
+          "choices": [
+            "full",
+            "secular"
+          ],
+          "required": false,
+          "description": "",
+          "source": "RunSection/General/HS/HSExecutionPlan.cpp:124"
+        },
+        "secularization": {
+          "name": "secularization",
+          "aliases": [
+            "secular"
+          ],
+          "value_type": "bool",
+          "default": false,
+          "choices": [],
+          "required": false,
+          "description": "",
+          "source": "RunSection/General/HS/HSExecutionPlan.cpp:127"
+        },
+        "powdergrid": {
+          "name": "powdergrid",
+          "aliases": [
+            "powder_grid",
+            "powdergridtype"
+          ],
+          "value_type": "string",
+          "default": null,
+          "choices": [
+            "uniform",
+            "sophe",
+            "octant"
+          ],
+          "required": false,
+          "description": "",
+          "source": "RunSection/General/HS/HSExecutionPlan.cpp:147"
+        },
+        "powdersamplingpoints": {
+          "name": "powdersamplingpoints",
+          "aliases": [],
+          "value_type": "int",
+          "default": 0,
+          "choices": [],
+          "required": false,
+          "description": "",
+          "source": "RunSection/General/HS/HSExecutionPlan.cpp:164"
+        },
+        "powdergridsize": {
+          "name": "powdergridsize",
+          "aliases": [],
+          "value_type": "int",
+          "default": 4,
+          "choices": [],
+          "required": false,
+          "description": "",
+          "source": "RunSection/General/HS/HSExecutionPlan.cpp:165"
+        },
+        "powdersymmetry": {
+          "name": "powdersymmetry",
+          "aliases": [
+            "powdergridsymmetry"
+          ],
+          "value_type": "string",
+          "default": null,
+          "choices": [],
+          "required": false,
+          "description": "",
+          "source": "RunSection/General/HS/HSExecutionPlan.cpp:166"
+        },
+        "powderdomain": {
+          "name": "powderdomain",
+          "aliases": [],
+          "value_type": "string",
+          "default": null,
+          "choices": [
+            "upper",
+            "full"
+          ],
+          "required": false,
+          "description": "",
+          "source": "RunSection/General/HS/HSExecutionPlan.cpp:170"
+        },
+        "powderfullsphere": {
+          "name": "powderfullsphere",
+          "aliases": [
+            "powder_full_sphere"
+          ],
+          "value_type": "bool",
+          "default": false,
+          "choices": [],
+          "required": false,
+          "description": "",
+          "source": "RunSection/General/HS/HSExecutionPlan.cpp:186"
+        },
+        "powdergammapoints": {
+          "name": "powdergammapoints",
+          "aliases": [],
+          "value_type": "int",
+          "default": 1,
+          "choices": [],
+          "required": false,
+          "description": "",
+          "source": "RunSection/General/HS/HSExecutionPlan.cpp:201"
+        },
+        "powdergamma": {
+          "name": "powdergamma",
+          "aliases": [
+            "powder_gamma"
+          ],
+          "value_type": "float",
+          "default": 0.0,
+          "choices": [],
+          "required": false,
+          "description": "",
+          "source": "RunSection/General/HS/HSExecutionPlan.cpp:203"
+        },
+        "powderorientation": {
+          "name": "powderorientation",
+          "aliases": [
+            "powder_orientation"
+          ],
+          "value_type": "string",
+          "default": null,
+          "choices": [],
+          "required": false,
+          "description": "",
+          "source": "RunSection/General/HS/HSExecutionPlan.cpp:213"
+        },
+        "powdertheta": {
+          "name": "powdertheta",
+          "aliases": [
+            "powder_theta"
+          ],
+          "value_type": "float",
+          "default": 0.0,
+          "choices": [],
+          "required": false,
+          "description": "",
+          "source": "RunSection/General/HS/HSExecutionPlan.cpp:242"
+        },
+        "powderphi": {
+          "name": "powderphi",
+          "aliases": [
+            "powder_phi"
+          ],
+          "value_type": "float",
+          "default": 0.0,
+          "choices": [],
+          "required": false,
+          "description": "",
+          "source": "RunSection/General/HS/HSExecutionPlan.cpp:244"
+        },
+        "powderweight": {
+          "name": "powderweight",
+          "aliases": [
+            "powder_weight"
+          ],
+          "value_type": "float",
+          "default": 1.0,
+          "choices": [],
+          "required": false,
+          "description": "",
+          "source": "RunSection/General/HS/HSExecutionPlan.cpp:246"
+        },
+        "powderaveraging": {
+          "name": "powderaveraging",
+          "aliases": [
+            "powder"
+          ],
+          "value_type": "bool",
+          "default": false,
+          "choices": [],
+          "required": false,
+          "description": "",
+          "source": "RunSection/General/HS/HSExecutionPlan.cpp:384"
+        },
+        "totaltime": {
+          "name": "totaltime",
+          "aliases": [],
+          "value_type": "float",
+          "default": 10000.0,
+          "choices": [],
+          "required": false,
+          "description": "",
+          "source": "RunSection/General/HS/HSExecutionPlan.cpp:397"
+        },
+        "timestep": {
+          "name": "timestep",
+          "aliases": [],
+          "value_type": "float",
+          "default": 1.0,
+          "choices": [],
+          "required": false,
+          "description": "",
+          "source": "RunSection/General/HS/HSExecutionPlan.cpp:398"
+        },
+        "propagationmethod": {
+          "name": "propagationmethod",
+          "aliases": [
+            "propagator"
+          ],
+          "value_type": "string",
+          "default": "normal",
+          "choices": [
+            "normal",
+            "exp",
+            "autoexpm",
+            "krylov",
+            "rk4"
+          ],
+          "required": false,
+          "description": "",
+          "source": "RunSection/General/HS/HSExecutionPlan.cpp:403"
+        },
+        "precision": {
+          "name": "precision",
+          "aliases": [],
+          "value_type": "string",
+          "default": "single",
+          "choices": [],
+          "required": false,
+          "description": "",
+          "source": "RunSection/General/HS/HSExecutionPlan.cpp:410"
+        },
+        "krylovsize": {
+          "name": "krylovsize",
+          "aliases": [],
+          "value_type": "int",
+          "default": 16,
+          "choices": [],
+          "required": false,
+          "description": "",
+          "source": "RunSection/General/HS/HSExecutionPlan.cpp:411"
+        },
+        "krylovtol": {
+          "name": "krylovtol",
+          "aliases": [],
+          "value_type": "float",
+          "default": 0.0,
+          "choices": [],
+          "required": false,
+          "description": "",
+          "source": "RunSection/General/HS/HSExecutionPlan.cpp:412"
+        },
+        "montecarlosamples": {
+          "name": "montecarlosamples",
+          "aliases": [],
+          "value_type": "int",
+          "default": null,
+          "choices": [],
+          "required": false,
+          "description": "",
+          "source": "RunSection/General/HS/HSExecutionPlan.cpp:423"
+        },
+        "samplingmethod": {
+          "name": "samplingmethod",
+          "aliases": [],
+          "value_type": "string",
+          "default": null,
+          "choices": [
+            "suz",
+            "coherent"
+          ],
+          "required": false,
+          "description": "",
+          "source": "RunSection/General/HS/HSExecutionPlan.cpp:426"
+        },
+        "stochasticstandarddeviation": {
+          "name": "stochasticstandarddeviation",
+          "aliases": [],
+          "value_type": "bool",
+          "default": false,
+          "choices": [],
+          "required": false,
+          "description": "",
+          "source": "RunSection/General/HS/HSExecutionPlan.cpp:433"
+        },
+        "autoseed": {
+          "name": "autoseed",
+          "aliases": [],
+          "value_type": "bool",
+          "default": true,
+          "choices": [],
+          "required": false,
+          "description": "",
+          "source": "RunSection/General/HS/HSExecutionPlan.cpp:447"
+        },
+        "seed": {
+          "name": "seed",
+          "aliases": [],
+          "value_type": "float",
+          "default": 1.0,
+          "choices": [],
+          "required": false,
+          "description": "",
+          "source": "RunSection/General/HS/HSExecutionPlan.cpp:448"
+        },
+        "hamiltonianh0list": {
+          "name": "hamiltonianh0list",
+          "aliases": [],
+          "value_type": "list",
+          "default": null,
+          "choices": [],
+          "required": false,
+          "description": "",
+          "source": "RunSection/General/HS/HSExecutionPlan.cpp:450"
+        },
+        "hamiltonianh1list": {
+          "name": "hamiltonianh1list",
+          "aliases": [],
+          "value_type": "list",
+          "default": null,
+          "choices": [],
+          "required": false,
+          "description": "",
+          "source": "RunSection/General/HS/HSExecutionPlan.cpp:451"
+        },
+        "initialstatehamiltonian": {
+          "name": "initialstatehamiltonian",
+          "aliases": [],
+          "value_type": "list",
+          "default": null,
+          "choices": [],
+          "required": false,
+          "description": "",
+          "source": "RunSection/General/HS/HSExecutionPlan.cpp:453"
+        },
+        "transitionyields": {
+          "name": "transitionyields",
+          "aliases": [],
+          "value_type": "bool",
+          "default": true,
+          "choices": [],
+          "required": false,
+          "description": "",
+          "source": "RunSection/General/HS/HSExecutionPlan.cpp:455"
+        },
+        "yieldcorrections": {
+          "name": "yieldcorrections",
+          "aliases": [],
+          "value_type": "bool",
+          "default": false,
+          "choices": [],
+          "required": false,
+          "description": "",
+          "source": "RunSection/General/HS/HSExecutionPlan.cpp:456"
+        },
+        "spinlist": {
+          "name": "spinlist",
+          "aliases": [],
+          "value_type": "list",
+          "default": null,
+          "choices": [],
+          "required": false,
+          "description": "",
+          "source": "RunSection/General/HS/HSExecutionPlan.cpp:457"
+        },
+        "cidsp": {
+          "name": "cidsp",
+          "aliases": [],
+          "value_type": "bool",
+          "default": false,
+          "choices": [],
+          "required": false,
+          "description": "",
+          "source": "RunSection/General/HS/HSExecutionPlan.cpp:458"
+        },
+        "cidnp": {
+          "name": "cidnp",
+          "aliases": [],
+          "value_type": "bool",
+          "default": false,
+          "choices": [],
+          "required": false,
+          "description": "",
+          "source": "RunSection/General/HS/HSExecutionPlan.cpp:460"
+        },
+        "observables": {
+          "name": "observables",
+          "aliases": [
+            "observablemode",
+            "observable_mode"
+          ],
+          "value_type": "string",
+          "default": null,
+          "choices": [
+            "auto",
+            "states",
+            "spins",
+            "transitionyields",
+            "cidsp"
+          ],
+          "required": false,
+          "description": "",
+          "source": "RunSection/General/HS/HSExecutionPlan.cpp:464"
+        },
+        "integration": {
+          "name": "integration",
+          "aliases": [],
+          "value_type": "bool",
+          "default": false,
+          "choices": [],
+          "required": false,
+          "description": "",
+          "source": "RunSection/General/HS/HSExecutionPlan.cpp:546"
+        },
+        "reactionoperators": {
+          "name": "reactionoperators",
+          "aliases": [
+            "reactionoperator",
+            "reaction_operator"
+          ],
+          "value_type": "string",
+          "default": "haberkorn",
+          "choices": [],
+          "required": false,
+          "description": "",
+          "source": "RunSection/General/HS/HSExecutionPlan.cpp:559"
+        },
+        "relaxationmodel": {
+          "name": "relaxationmodel",
+          "aliases": [
+            "relaxation_model"
+          ],
+          "value_type": "string",
+          "default": null,
+          "choices": [],
+          "required": false,
+          "description": "",
+          "source": "RunSection/General/HS/HSExecutionPlan.cpp:573"
+        },
+        "method": {
+          "name": "method",
+          "aliases": [
+            "yieldmethod",
+            "yield_method"
+          ],
+          "value_type": "string",
+          "default": null,
+          "choices": [],
+          "required": false,
+          "description": "",
+          "source": "RunSection/General/HS/HSExecutionPlan.cpp:606"
+        }
+      },
+      "constraints": [
+        {
+          "kind": "conflicts",
+          "keys": [
+            "powderdomain",
+            "powderfullsphere"
+          ],
+          "message": "powderdomain conflicts with powderfullsphere",
+          "source": "RunSection/General/HS/HSExecutionPlan.cpp:195"
+        },
+        {
+          "kind": "range",
+          "keys": [
+            "powdergammapoints"
+          ],
+          "message": "powdergammapoints must be at least one",
+          "source": "RunSection/General/HS/HSExecutionPlan.cpp:207"
+        },
+        {
+          "kind": "conflicts",
+          "keys": [
+            "powderorientation",
+            "powdergamma"
+          ],
+          "message": "canonical powderorientation already contains the ZYZ gamma angle; do not combine it with powdergamma",
+          "source": "RunSection/General/HS/HSExecutionPlan.cpp:218"
+        },
+        {
+          "kind": "range",
+          "keys": [
+            "powderorientation"
+          ],
+          "message": "explicit powderorientation weight must be positive",
+          "source": "RunSection/General/HS/HSExecutionPlan.cpp:232"
+        },
+        {
+          "kind": "requires",
+          "keys": [
+            "powderaveraging",
+            "powdertheta",
+            "powderphi",
+            "powderweight"
+          ],
+          "message": "explicit powder orientation requires finite powdertheta and powderphi [powderweight]",
+          "source": "RunSection/General/HS/HSExecutionPlan.cpp:253"
+        },
+        {
+          "kind": "conflicts",
+          "keys": [
+            "powderorientation",
+            "powderaveraging"
+          ],
+          "message": "explicit powderorientation cannot be combined with generated powder-grid settings",
+          "source": "RunSection/General/HS/HSExecutionPlan.cpp:269"
+        },
+        {
+          "kind": "scoped",
+          "keys": [
+            "powdergridsize",
+            "powdersymmetry",
+            "powdergrid"
+          ],
+          "message": "powdergridsize/powdersymmetry are only valid with powdergrid=sophe",
+          "source": "RunSection/General/HS/HSExecutionPlan.cpp:282"
+        },
+        {
+          "kind": "requires",
+          "keys": [
+            "powdergrid",
+            "powdersamplingpoints"
+          ],
+          "message": "powdergrid=uniform requires powdersamplingpoints",
+          "source": "RunSection/General/HS/HSExecutionPlan.cpp:287"
+        },
+        {
+          "kind": "range",
+          "keys": [
+            "powdersamplingpoints"
+          ],
+          "message": "powdersamplingpoints must be at least one",
+          "source": "RunSection/General/HS/HSExecutionPlan.cpp:292"
+        },
+        {
+          "kind": "scoped",
+          "keys": [
+            "powdersamplingpoints",
+            "powdergrid",
+            "powdergridsize"
+          ],
+          "message": "powdersamplingpoints is not used by powdergrid=sophe; use powdergridsize",
+          "source": "RunSection/General/HS/HSExecutionPlan.cpp:301"
+        },
+        {
+          "kind": "scoped",
+          "keys": [
+            "powderdomain",
+            "powderfullsphere",
+            "powdergrid",
+            "powdersymmetry"
+          ],
+          "message": "powderdomain/powderfullsphere do not apply to powdergrid=sophe; powdersymmetry defines the SOPHE domain",
+          "source": "RunSection/General/HS/HSExecutionPlan.cpp:306"
+        },
+        {
+          "kind": "range",
+          "keys": [
+            "powdergridsize",
+            "powdergrid"
+          ],
+          "message": "powdergridsize must be at least one for powdergrid=sophe",
+          "source": "RunSection/General/HS/HSExecutionPlan.cpp:311"
+        },
+        {
+          "kind": "range",
+          "keys": [
+            "powdergrid"
+          ],
+          "message": "powdergrid=octant must be selected explicitly",
+          "source": "RunSection/General/HS/HSExecutionPlan.cpp:328"
+        },
+        {
+          "kind": "requires",
+          "keys": [
+            "powdergrid",
+            "powdersamplingpoints"
+          ],
+          "message": "powdergrid=octant requires positive powdersamplingpoints",
+          "source": "RunSection/General/HS/HSExecutionPlan.cpp:333"
+        },
+        {
+          "kind": "scoped",
+          "keys": [
+            "powdergridsize",
+            "powdersymmetry",
+            "powdergrid"
+          ],
+          "message": "powdergridsize/powdersymmetry are only valid with powdergrid=sophe",
+          "source": "RunSection/General/HS/HSExecutionPlan.cpp:338"
+        },
+        {
+          "kind": "requires",
+          "keys": [
+            "powderdomain",
+            "powderfullsphere",
+            "powderaveraging"
+          ],
+          "message": "powderdomain/powderfullsphere requires a generated powder grid",
+          "source": "RunSection/General/HS/HSExecutionPlan.cpp:352"
+        },
+        {
+          "kind": "requires",
+          "keys": [
+            "powdergammapoints",
+            "powderaveraging"
+          ],
+          "message": "powdergammapoints greater than one requires a generated theta/phi powder grid",
+          "source": "RunSection/General/HS/HSExecutionPlan.cpp:357"
+        },
+        {
+          "kind": "requires",
+          "keys": [
+            "powderaveraging",
+            "sampling",
+            "powdersamplingpoints"
+          ],
+          "message": "uniform SO(3) powder sampling requires powdersamplingpoints greater than one",
+          "source": "RunSection/General/HS/HSExecutionPlan.cpp:363"
+        },
+        {
+          "kind": "requires",
+          "keys": [
+            "powderaveraging",
+            "powderorientation"
+          ],
+          "message": "powderaveraging=true requires a generated powder grid or an explicit powderorientation",
+          "source": "RunSection/General/HS/HSExecutionPlan.cpp:388"
+        },
+        {
+          "kind": "conflicts",
+          "keys": [
+            "powderaveraging",
+            "sampling"
+          ],
+          "message": "powderaveraging=false conflicts with explicit powder sampling keywords",
+          "source": "RunSection/General/HS/HSExecutionPlan.cpp:393"
+        },
+        {
+          "kind": "range",
+          "keys": [
+            "totaltime"
+          ],
+          "message": "totaltime must be finite and non-negative",
+          "source": "RunSection/General/HS/HSExecutionPlan.cpp:399"
+        },
+        {
+          "kind": "range",
+          "keys": [
+            "timestep"
+          ],
+          "message": "timestep must be finite and positive",
+          "source": "RunSection/General/HS/HSExecutionPlan.cpp:400"
+        },
+        {
+          "kind": "range",
+          "keys": [
+            "krylovtol"
+          ],
+          "message": "krylovtol must be finite and positive when supplied",
+          "source": "RunSection/General/HS/HSExecutionPlan.cpp:418"
+        },
+        {
+          "kind": "range",
+          "keys": [
+            "montecarlosamples"
+          ],
+          "message": "montecarlosamples must be at least one",
+          "source": "RunSection/General/HS/HSExecutionPlan.cpp:424"
+        },
+        {
+          "kind": "requires",
+          "keys": [
+            "stochasticstandarddeviation",
+            "sampling"
+          ],
+          "message": "stochasticstandarddeviation=true requires sampling=stochastic",
+          "source": "RunSection/General/HS/HSExecutionPlan.cpp:438"
+        },
+        {
+          "kind": "requires",
+          "keys": [
+            "stochasticstandarddeviation",
+            "montecarlosamples"
+          ],
+          "message": "stochasticstandarddeviation=true requires montecarlosamples of at least two",
+          "source": "RunSection/General/HS/HSExecutionPlan.cpp:443"
+        },
+        {
+          "kind": "requires",
+          "keys": [
+            "observables",
+            "calculation"
+          ],
+          "message": "observables=states requires calculation=timeevolution",
+          "source": "RunSection/General/HS/HSExecutionPlan.cpp:494"
+        },
+        {
+          "kind": "conflicts",
+          "keys": [
+            "observables",
+            "spinlist",
+            "cidsp",
+            "cidnp"
+          ],
+          "message": "observables=states cannot be combined with spinlist or cidsp/cidnp",
+          "source": "RunSection/General/HS/HSExecutionPlan.cpp:496"
+        },
+        {
+          "kind": "conflicts",
+          "keys": [
+            "observables",
+            "transitionyields"
+          ],
+          "message": "observables=states conflicts with transitionyields=true",
+          "source": "RunSection/General/HS/HSExecutionPlan.cpp:498"
+        },
+        {
+          "kind": "requires",
+          "keys": [
+            "observables",
+            "spinlist"
+          ],
+          "message": "observables=spins requires spinlist",
+          "source": "RunSection/General/HS/HSExecutionPlan.cpp:504"
+        },
+        {
+          "kind": "conflicts",
+          "keys": [
+            "observables",
+            "cidsp",
+            "cidnp"
+          ],
+          "message": "observables=spins conflicts with cidsp/cidnp=true",
+          "source": "RunSection/General/HS/HSExecutionPlan.cpp:506"
+        },
+        {
+          "kind": "conflicts",
+          "keys": [
+            "observables",
+            "transitionyields"
+          ],
+          "message": "observables=spins conflicts with transitionyields=true",
+          "source": "RunSection/General/HS/HSExecutionPlan.cpp:508"
+        },
+        {
+          "kind": "requires",
+          "keys": [
+            "observables",
+            "transitionyields",
+            "calculation"
+          ],
+          "message": "observables=transitionyields requires calculation=yields",
+          "source": "RunSection/General/HS/HSExecutionPlan.cpp:515"
+        },
+        {
+          "kind": "conflicts",
+          "keys": [
+            "observables",
+            "transitionyields",
+            "spinlist",
+            "cidsp",
+            "cidnp"
+          ],
+          "message": "observables=transitionyields cannot be combined with spinlist or cidsp/cidnp",
+          "source": "RunSection/General/HS/HSExecutionPlan.cpp:517"
+        },
+        {
+          "kind": "conflicts",
+          "keys": [
+            "observables",
+            "transitionyields"
+          ],
+          "message": "observables=transitionyields conflicts with transitionyields=false",
+          "source": "RunSection/General/HS/HSExecutionPlan.cpp:519"
+        },
+        {
+          "kind": "requires",
+          "keys": [
+            "observables",
+            "cidsp",
+            "spinlist"
+          ],
+          "message": "observables=cidsp requires spinlist",
+          "source": "RunSection/General/HS/HSExecutionPlan.cpp:525"
+        },
+        {
+          "kind": "conflicts",
+          "keys": [
+            "observables",
+            "cidsp",
+            "transitionyields"
+          ],
+          "message": "observables=cidsp conflicts with transitionyields=true",
+          "source": "RunSection/General/HS/HSExecutionPlan.cpp:527"
+        },
+        {
+          "kind": "range",
+          "keys": [
+            "reactionoperators"
+          ],
+          "message": "reactionoperators must be haberkorn in HSGeneral",
+          "source": "RunSection/General/HS/HSExecutionPlan.cpp:570"
+        },
+        {
+          "kind": "requires",
+          "keys": [
+            "approximation",
+            "secularization"
+          ],
+          "message": "approximation=secular/RWA requires hamiltonianh0list so H0 is explicit; hamiltonianh1list is optional and remains non-secular",
+          "source": "RunSection/General/HS/HSExecutionPlan.cpp:585"
+        },
+        {
+          "kind": "requires",
+          "keys": [
+            "powderaveraging"
+          ],
+          "message": "HSGeneral powder propagation requires hamiltonianh0list so the orientation-specific H0 is explicit",
+          "source": "RunSection/General/HS/HSExecutionPlan.cpp:590"
+        },
+        {
+          "kind": "requires",
+          "keys": [
+            "cidsp",
+            "cidnp",
+            "spinlist"
+          ],
+          "message": "cidsp/cidnp output requires spinlist",
+          "source": "RunSection/General/HS/HSExecutionPlan.cpp:596"
+        },
+        {
+          "kind": "requires",
+          "keys": [
+            "calculation",
+            "transitionyields",
+            "spinlist",
+            "cidsp"
+          ],
+          "message": "calculation=yields with transitionyields=false requires spinlist for integrated polarization/CIDSP output",
+          "source": "RunSection/General/HS/HSExecutionPlan.cpp:601"
+        },
+        {
+          "kind": "range",
+          "keys": [
+            "method"
+          ],
+          "message": "yield method must be timeevo/finite or timeinf",
+          "source": "RunSection/General/HS/HSExecutionPlan.cpp:614"
+        },
+        {
+          "kind": "requires",
+          "keys": [
+            "calculation",
+            "method"
+          ],
+          "message": "calculation=timeevolution requires method=timeevo when method is specified",
+          "source": "RunSection/General/HS/HSExecutionPlan.cpp:618"
+        },
+        {
+          "kind": "range",
+          "keys": [
+            "method"
+          ],
+          "message": "dynamic yields require finite-time propagation; method=timeinf is only defined for static Hamiltonians",
+          "source": "RunSection/General/HS/HSExecutionPlan.cpp:629"
+        }
+      ]
+    },
+    "SSGeneral": {
+      "type": "SSGeneral",
+      "aliases": [
+        "ssgeneral",
+        "SSGeneral",
+        "ss-general",
+        "SS-General"
+      ],
+      "properties": {
+        "calculation": {
+          "name": "calculation",
+          "aliases": [
+            "calculationmode",
+            "calculation_mode",
+            "method"
+          ],
+          "value_type": "string",
+          "default": "timeintegrated",
+          "choices": [
+            "timeevolution",
+            "timeintegrated",
+            "timeinf",
+            "steadystate"
+          ],
+          "required": false,
+          "description": "",
+          "source": "RunSection/General/SS/SSExecutionPlan.cpp:70"
+        },
+        "totaltime": {
+          "name": "totaltime",
+          "aliases": [],
+          "value_type": "float",
+          "default": 1000.0,
+          "choices": [],
+          "required": false,
+          "description": "",
+          "source": "RunSection/General/SS/SSExecutionPlan.cpp:76"
+        },
+        "timestep": {
+          "name": "timestep",
+          "aliases": [],
+          "value_type": "float",
+          "default": 1.0,
+          "choices": [],
+          "required": false,
+          "description": "",
+          "source": "RunSection/General/SS/SSExecutionPlan.cpp:76"
+        },
+        "solverresidualtolerance": {
+          "name": "solverresidualtolerance",
+          "aliases": [],
+          "value_type": "float",
+          "default": 1e-08,
+          "choices": [],
+          "required": false,
+          "description": "",
+          "source": "RunSection/General/SS/SSExecutionPlan.cpp:77"
+        },
+        "diagnostics": {
+          "name": "diagnostics",
+          "aliases": [],
+          "value_type": "bool",
+          "default": true,
+          "choices": [],
+          "required": false,
+          "description": "",
+          "source": "RunSection/General/SS/SSExecutionPlan.cpp:77"
+        },
+        "propagationmethod": {
+          "name": "propagationmethod",
+          "aliases": [
+            "propagator"
+          ],
+          "value_type": "string",
+          "default": "exponential",
+          "choices": [
+            "exponential",
+            "rk4"
+          ],
+          "required": false,
+          "description": "",
+          "source": "RunSection/General/SS/SSExecutionPlan.cpp:82"
+        },
+        "observables": {
+          "name": "observables",
+          "aliases": [
+            "observablemode"
+          ],
+          "value_type": "string",
+          "default": "exponential",
+          "choices": [
+            "states",
+            "transitionyields",
+            "both"
+          ],
+          "required": false,
+          "description": "",
+          "source": "RunSection/General/SS/SSExecutionPlan.cpp:88"
+        },
+        "hamiltonianmode": {
+          "name": "hamiltonianmode",
+          "aliases": [
+            "hamiltonian_mode",
+            "approximation"
+          ],
+          "value_type": "string",
+          "default": "full",
+          "choices": [],
+          "required": false,
+          "description": "",
+          "source": "RunSection/General/SS/SSExecutionPlan.cpp:95"
+        },
+        "relaxationmodel": {
+          "name": "relaxationmodel",
+          "aliases": [
+            "relaxation_model"
+          ],
+          "value_type": "string",
+          "default": "operators",
+          "choices": [
+            "operators",
+            "nakajima_zwanzig",
+            "redfield"
+          ],
+          "required": false,
+          "description": "",
+          "source": "RunSection/General/SS/SSExecutionPlan.cpp:101"
+        },
+        "reactionoperators": {
+          "name": "reactionoperators",
+          "aliases": [
+            "reactionoperator",
+            "reaction_operator"
+          ],
+          "value_type": "string",
+          "default": "haberkorn",
+          "choices": [],
+          "required": false,
+          "description": "",
+          "source": "RunSection/General/SS/SSExecutionPlan.cpp:107"
+        },
+        "powderorientation": {
+          "name": "powderorientation",
+          "aliases": [
+            "orientation"
+          ],
+          "value_type": "string",
+          "default": null,
+          "choices": [],
+          "required": false,
+          "description": "",
+          "source": "RunSection/General/SS/SSExecutionPlan.cpp:115"
+        },
+        "powdergrid": {
+          "name": "powdergrid",
+          "aliases": [
+            "powder_grid"
+          ],
+          "value_type": "string",
+          "default": null,
+          "choices": [
+            "uniform",
+            "octant",
+            "sophe"
+          ],
+          "required": false,
+          "description": "",
+          "source": "RunSection/General/SS/SSExecutionPlan.cpp:125"
+        },
+        "powdersamplingpoints": {
+          "name": "powdersamplingpoints",
+          "aliases": [],
+          "value_type": "int",
+          "default": 1,
+          "choices": [],
+          "required": false,
+          "description": "",
+          "source": "RunSection/General/SS/SSExecutionPlan.cpp:126"
+        },
+        "powdergridsize": {
+          "name": "powdergridsize",
+          "aliases": [],
+          "value_type": "int",
+          "default": 4,
+          "choices": [],
+          "required": false,
+          "description": "",
+          "source": "RunSection/General/SS/SSExecutionPlan.cpp:127"
+        },
+        "powdersymmetry": {
+          "name": "powdersymmetry",
+          "aliases": [],
+          "value_type": "string",
+          "default": "c1",
+          "choices": [],
+          "required": false,
+          "description": "",
+          "source": "RunSection/General/SS/SSExecutionPlan.cpp:128"
+        },
+        "powdergammapoints": {
+          "name": "powdergammapoints",
+          "aliases": [],
+          "value_type": "int",
+          "default": 1,
+          "choices": [],
+          "required": false,
+          "description": "",
+          "source": "RunSection/General/SS/SSExecutionPlan.cpp:129"
+        },
+        "powdergamma": {
+          "name": "powdergamma",
+          "aliases": [],
+          "value_type": "float",
+          "default": 0.0,
+          "choices": [],
+          "required": false,
+          "description": "",
+          "source": "RunSection/General/SS/SSExecutionPlan.cpp:130"
+        },
+        "powderdomain": {
+          "name": "powderdomain",
+          "aliases": [],
+          "value_type": "string",
+          "default": null,
+          "choices": [
+            "full",
+            "upper"
+          ],
+          "required": false,
+          "description": "",
+          "source": "RunSection/General/SS/SSExecutionPlan.cpp:134"
+        }
+      },
+      "constraints": [
+        {
+          "kind": "range",
+          "keys": [
+            "totaltime"
+          ],
+          "message": "totaltime must be finite and non-negative",
+          "source": "RunSection/General/SS/SSExecutionPlan.cpp:78"
+        },
+        {
+          "kind": "range",
+          "keys": [
+            "timestep"
+          ],
+          "message": "timestep must be finite and positive",
+          "source": "RunSection/General/SS/SSExecutionPlan.cpp:79"
+        },
+        {
+          "kind": "range",
+          "keys": [
+            "solverresidualtolerance"
+          ],
+          "message": "solverresidualtolerance must be finite and positive",
+          "source": "RunSection/General/SS/SSExecutionPlan.cpp:80"
+        },
+        {
+          "kind": "range",
+          "keys": [
+            "hamiltonianmode"
+          ],
+          "message": "hamiltonian mode/approximation must be full, rotated_zyz, or secular/highfield",
+          "source": "RunSection/General/SS/SSExecutionPlan.cpp:99"
+        },
+        {
+          "kind": "range",
+          "keys": [
+            "reactionoperators"
+          ],
+          "message": "reactionoperators must be haberkorn (Lindblad is currently parity-gated)",
+          "source": "RunSection/General/SS/SSExecutionPlan.cpp:111"
+        },
+        {
+          "kind": "range",
+          "keys": [
+            "powderorientation"
+          ],
+          "message": "explicit powderorientation weight must be positive",
+          "source": "RunSection/General/SS/SSExecutionPlan.cpp:121"
+        },
+        {
+          "kind": "range",
+          "keys": [
+            "powdergammapoints"
+          ],
+          "message": "powdergammapoints must be at least one",
+          "source": "RunSection/General/SS/SSExecutionPlan.cpp:131"
+        },
+        {
+          "kind": "conflicts",
+          "keys": [
+            "powderorientation"
+          ],
+          "message": "explicit powderorientation cannot be combined with generated powder-grid settings",
+          "source": "RunSection/General/SS/SSExecutionPlan.cpp:137"
+        },
+        {
+          "kind": "scoped",
+          "keys": [
+            "powdergridsize",
+            "powdersymmetry",
+            "powdergrid"
+          ],
+          "message": "powdergridsize/powdersymmetry are only valid with powdergrid=sophe",
+          "source": "RunSection/General/SS/SSExecutionPlan.cpp:161"
+        },
+        {
+          "kind": "requires",
+          "keys": [
+            "powdergrid",
+            "powdersamplingpoints"
+          ],
+          "message": "powdergrid=uniform requires powdersamplingpoints",
+          "source": "RunSection/General/SS/SSExecutionPlan.cpp:163"
+        },
+        {
+          "kind": "range",
+          "keys": [
+            "powdersamplingpoints"
+          ],
+          "message": "powdersamplingpoints must be at least one",
+          "source": "RunSection/General/SS/SSExecutionPlan.cpp:165"
+        },
+        {
+          "kind": "scoped",
+          "keys": [
+            "powdersamplingpoints",
+            "powdergrid",
+            "powdergridsize"
+          ],
+          "message": "powdersamplingpoints is not used by powdergrid=sophe; use powdergridsize",
+          "source": "RunSection/General/SS/SSExecutionPlan.cpp:170"
+        },
+        {
+          "kind": "scoped",
+          "keys": [
+            "powderdomain",
+            "powdergrid",
+            "powdersymmetry"
+          ],
+          "message": "powderdomain does not apply to powdergrid=sophe; powdersymmetry defines its domain",
+          "source": "RunSection/General/SS/SSExecutionPlan.cpp:172"
+        },
+        {
+          "kind": "range",
+          "keys": [
+            "powdergridsize",
+            "powdergrid"
+          ],
+          "message": "powdergridsize must be at least one for powdergrid=sophe",
+          "source": "RunSection/General/SS/SSExecutionPlan.cpp:174"
+        },
+        {
+          "kind": "range",
+          "keys": [
+            "powdergrid"
+          ],
+          "message": "powdergrid=octant must be selected explicitly",
+          "source": "RunSection/General/SS/SSExecutionPlan.cpp:184"
+        },
+        {
+          "kind": "requires",
+          "keys": [
+            "powdergrid",
+            "powdersamplingpoints"
+          ],
+          "message": "powdergrid=octant requires positive powdersamplingpoints",
+          "source": "RunSection/General/SS/SSExecutionPlan.cpp:186"
+        },
+        {
+          "kind": "scoped",
+          "keys": [
+            "powdergridsize",
+            "powdersymmetry",
+            "powdergrid"
+          ],
+          "message": "powdergridsize/powdersymmetry are only valid with powdergrid=sophe",
+          "source": "RunSection/General/SS/SSExecutionPlan.cpp:188"
+        },
+        {
+          "kind": "requires",
+          "keys": [
+            "powderdomain"
+          ],
+          "message": "powderdomain requires a generated powder grid",
+          "source": "RunSection/General/SS/SSExecutionPlan.cpp:195"
+        },
+        {
+          "kind": "requires",
+          "keys": [
+            "powdergammapoints"
+          ],
+          "message": "powdergammapoints greater than one requires a generated theta/phi powder grid",
+          "source": "RunSection/General/SS/SSExecutionPlan.cpp:197"
+        },
+        {
+          "kind": "requires",
+          "keys": [
+            "powdergamma",
+            "powdergammapoints"
+          ],
+          "message": "powdergamma requires powdergammapoints greater than one",
+          "source": "RunSection/General/SS/SSExecutionPlan.cpp:199"
+        }
+      ]
+    },
+    "MultiSSGeneral": {
+      "type": "MultiSSGeneral",
+      "aliases": [
+        "multissgeneral",
+        "MultiSSGeneral",
+        "multiss-general",
+        "MultiSS-General"
+      ],
+      "properties": {
+        "calculation": {
+          "name": "calculation",
+          "aliases": [
+            "calculationmode",
+            "calculation_mode"
+          ],
+          "value_type": "string",
+          "default": "timeevolution",
+          "choices": [
+            "timeevolution",
+            "timeintegrated",
+            "timeinf",
+            "steadystate"
+          ],
+          "required": false,
+          "description": "",
+          "source": "RunSection/General/MultiSS/MultiSSExecutionPlan.cpp:90"
+        },
+        "totaltime": {
+          "name": "totaltime",
+          "aliases": [],
+          "value_type": "float",
+          "default": 1000.0,
+          "choices": [],
+          "required": false,
+          "description": "",
+          "source": "RunSection/General/MultiSS/MultiSSExecutionPlan.cpp:99"
+        },
+        "timestep": {
+          "name": "timestep",
+          "aliases": [],
+          "value_type": "float",
+          "default": 1.0,
+          "choices": [],
+          "required": false,
+          "description": "",
+          "source": "RunSection/General/MultiSS/MultiSSExecutionPlan.cpp:99"
+        },
+        "solverresidualtolerance": {
+          "name": "solverresidualtolerance",
+          "aliases": [],
+          "value_type": "float",
+          "default": 1e-08,
+          "choices": [],
+          "required": false,
+          "description": "",
+          "source": "RunSection/General/MultiSS/MultiSSExecutionPlan.cpp:100"
+        },
+        "krylovdimension": {
+          "name": "krylovdimension",
+          "aliases": [],
+          "value_type": "int",
+          "default": 30,
+          "choices": [],
+          "required": false,
+          "description": "",
+          "source": "RunSection/General/MultiSS/MultiSSExecutionPlan.cpp:101"
+        },
+        "krylovtolerance": {
+          "name": "krylovtolerance",
+          "aliases": [],
+          "value_type": "float",
+          "default": 1e-10,
+          "choices": [],
+          "required": false,
+          "description": "",
+          "source": "RunSection/General/MultiSS/MultiSSExecutionPlan.cpp:102"
+        },
+        "diagnostics": {
+          "name": "diagnostics",
+          "aliases": [],
+          "value_type": "bool",
+          "default": true,
+          "choices": [],
+          "required": false,
+          "description": "",
+          "source": "RunSection/General/MultiSS/MultiSSExecutionPlan.cpp:103"
+        },
+        "transitionfluxes": {
+          "name": "transitionfluxes",
+          "aliases": [],
+          "value_type": "bool",
+          "default": false,
+          "choices": [],
+          "required": false,
+          "description": "",
+          "source": "RunSection/General/MultiSS/MultiSSExecutionPlan.cpp:104"
+        },
+        "propagationmethod": {
+          "name": "propagationmethod",
+          "aliases": [
+            "propagator"
+          ],
+          "value_type": "string",
+          "default": "rk4",
+          "choices": [
+            "rk4",
+            "exponential",
+            "krylov"
+          ],
+          "required": false,
+          "description": "",
+          "source": "RunSection/General/MultiSS/MultiSSExecutionPlan.cpp:117"
+        },
+        "observables": {
+          "name": "observables",
+          "aliases": [
+            "observablemode"
+          ],
+          "value_type": "string",
+          "default": "both",
+          "choices": [
+            "populations",
+            "states",
+            "both"
+          ],
+          "required": false,
+          "description": "",
+          "source": "RunSection/General/MultiSS/MultiSSExecutionPlan.cpp:124"
+        },
+        "hamiltonianmode": {
+          "name": "hamiltonianmode",
+          "aliases": [
+            "hamiltonian_mode"
+          ],
+          "value_type": "string",
+          "default": "full",
+          "choices": [
+            "full",
+            "rotated_zyz",
+            "rotated_sa"
+          ],
+          "required": false,
+          "description": "",
+          "source": "RunSection/General/MultiSS/MultiSSExecutionPlan.cpp:131"
+        },
+        "relaxationmodel": {
+          "name": "relaxationmodel",
+          "aliases": [
+            "relaxation_model"
+          ],
+          "value_type": "string",
+          "default": "operators",
+          "choices": [
+            "operators",
+            "nakajima_zwanzig",
+            "redfield"
+          ],
+          "required": false,
+          "description": "",
+          "source": "RunSection/General/MultiSS/MultiSSExecutionPlan.cpp:141"
+        },
+        "powderorientation": {
+          "name": "powderorientation",
+          "aliases": [
+            "orientation"
+          ],
+          "value_type": "string",
+          "default": null,
+          "choices": [],
+          "required": false,
+          "description": "",
+          "source": "RunSection/General/MultiSS/MultiSSExecutionPlan.cpp:152"
+        },
+        "powdergrid": {
+          "name": "powdergrid",
+          "aliases": [
+            "powder_grid"
+          ],
+          "value_type": "string",
+          "default": null,
+          "choices": [
+            "uniform",
+            "octant",
+            "sophe"
+          ],
+          "required": false,
+          "description": "",
+          "source": "RunSection/General/MultiSS/MultiSSExecutionPlan.cpp:164"
+        },
+        "powdersamplingpoints": {
+          "name": "powdersamplingpoints",
+          "aliases": [],
+          "value_type": "int",
+          "default": 1,
+          "choices": [],
+          "required": false,
+          "description": "",
+          "source": "RunSection/General/MultiSS/MultiSSExecutionPlan.cpp:165"
+        },
+        "powdergridsize": {
+          "name": "powdergridsize",
+          "aliases": [],
+          "value_type": "int",
+          "default": 4,
+          "choices": [],
+          "required": false,
+          "description": "",
+          "source": "RunSection/General/MultiSS/MultiSSExecutionPlan.cpp:166"
+        },
+        "powdersymmetry": {
+          "name": "powdersymmetry",
+          "aliases": [],
+          "value_type": "string",
+          "default": "c1",
+          "choices": [],
+          "required": false,
+          "description": "",
+          "source": "RunSection/General/MultiSS/MultiSSExecutionPlan.cpp:167"
+        },
+        "powdergammapoints": {
+          "name": "powdergammapoints",
+          "aliases": [],
+          "value_type": "int",
+          "default": 1,
+          "choices": [],
+          "required": false,
+          "description": "",
+          "source": "RunSection/General/MultiSS/MultiSSExecutionPlan.cpp:168"
+        },
+        "powdergamma": {
+          "name": "powdergamma",
+          "aliases": [],
+          "value_type": "float",
+          "default": 0.0,
+          "choices": [],
+          "required": false,
+          "description": "",
+          "source": "RunSection/General/MultiSS/MultiSSExecutionPlan.cpp:169"
+        },
+        "powderdomain": {
+          "name": "powderdomain",
+          "aliases": [],
+          "value_type": "string",
+          "default": null,
+          "choices": [
+            "full",
+            "upper"
+          ],
+          "required": false,
+          "description": "",
+          "source": "RunSection/General/MultiSS/MultiSSExecutionPlan.cpp:174"
+        }
+      },
+      "constraints": [
+        {
+          "kind": "range",
+          "keys": [
+            "totaltime"
+          ],
+          "message": "totaltime must be finite and non-negative",
+          "source": "RunSection/General/MultiSS/MultiSSExecutionPlan.cpp:106"
+        },
+        {
+          "kind": "range",
+          "keys": [
+            "timestep"
+          ],
+          "message": "timestep must be finite and positive",
+          "source": "RunSection/General/MultiSS/MultiSSExecutionPlan.cpp:108"
+        },
+        {
+          "kind": "range",
+          "keys": [
+            "solverresidualtolerance"
+          ],
+          "message": "solverresidualtolerance must be finite and positive",
+          "source": "RunSection/General/MultiSS/MultiSSExecutionPlan.cpp:110"
+        },
+        {
+          "kind": "range",
+          "keys": [
+            "krylovdimension"
+          ],
+          "message": "krylovdimension must be at least two",
+          "source": "RunSection/General/MultiSS/MultiSSExecutionPlan.cpp:112"
+        },
+        {
+          "kind": "range",
+          "keys": [
+            "krylovtolerance"
+          ],
+          "message": "krylovtolerance must be finite and positive",
+          "source": "RunSection/General/MultiSS/MultiSSExecutionPlan.cpp:114"
+        },
+        {
+          "kind": "range",
+          "keys": [
+            "powderorientation"
+          ],
+          "message": "explicit powderorientation weight must be positive",
+          "source": "RunSection/General/MultiSS/MultiSSExecutionPlan.cpp:159"
+        },
+        {
+          "kind": "range",
+          "keys": [
+            "powdergammapoints"
+          ],
+          "message": "powdergammapoints must be at least one",
+          "source": "RunSection/General/MultiSS/MultiSSExecutionPlan.cpp:171"
+        },
+        {
+          "kind": "conflicts",
+          "keys": [
+            "powderorientation"
+          ],
+          "message": "explicit powderorientation cannot be combined with generated powder-grid settings",
+          "source": "RunSection/General/MultiSS/MultiSSExecutionPlan.cpp:177"
+        },
+        {
+          "kind": "scoped",
+          "keys": [
+            "powdergridsize",
+            "powdersymmetry",
+            "powdergrid"
+          ],
+          "message": "powdergridsize/powdersymmetry are only valid with powdergrid=sophe",
+          "source": "RunSection/General/MultiSS/MultiSSExecutionPlan.cpp:201"
+        },
+        {
+          "kind": "requires",
+          "keys": [
+            "powdergrid",
+            "powdersamplingpoints"
+          ],
+          "message": "powdergrid=uniform requires powdersamplingpoints",
+          "source": "RunSection/General/MultiSS/MultiSSExecutionPlan.cpp:203"
+        },
+        {
+          "kind": "range",
+          "keys": [
+            "powdersamplingpoints"
+          ],
+          "message": "powdersamplingpoints must be at least one",
+          "source": "RunSection/General/MultiSS/MultiSSExecutionPlan.cpp:205"
+        },
+        {
+          "kind": "scoped",
+          "keys": [
+            "powdersamplingpoints",
+            "powdergrid",
+            "powdergridsize"
+          ],
+          "message": "powdersamplingpoints is not used by powdergrid=sophe; use powdergridsize",
+          "source": "RunSection/General/MultiSS/MultiSSExecutionPlan.cpp:210"
+        },
+        {
+          "kind": "scoped",
+          "keys": [
+            "powderdomain",
+            "powdergrid",
+            "powdersymmetry"
+          ],
+          "message": "powderdomain does not apply to powdergrid=sophe; powdersymmetry defines its domain",
+          "source": "RunSection/General/MultiSS/MultiSSExecutionPlan.cpp:212"
+        },
+        {
+          "kind": "range",
+          "keys": [
+            "powdergridsize",
+            "powdergrid"
+          ],
+          "message": "powdergridsize must be at least one for powdergrid=sophe",
+          "source": "RunSection/General/MultiSS/MultiSSExecutionPlan.cpp:214"
+        },
+        {
+          "kind": "range",
+          "keys": [
+            "powdergrid"
+          ],
+          "message": "powdergrid=octant must be selected explicitly",
+          "source": "RunSection/General/MultiSS/MultiSSExecutionPlan.cpp:224"
+        },
+        {
+          "kind": "requires",
+          "keys": [
+            "powdergrid",
+            "powdersamplingpoints"
+          ],
+          "message": "powdergrid=octant requires positive powdersamplingpoints",
+          "source": "RunSection/General/MultiSS/MultiSSExecutionPlan.cpp:226"
+        },
+        {
+          "kind": "scoped",
+          "keys": [
+            "powdergridsize",
+            "powdersymmetry",
+            "powdergrid"
+          ],
+          "message": "powdergridsize/powdersymmetry are only valid with powdergrid=sophe",
+          "source": "RunSection/General/MultiSS/MultiSSExecutionPlan.cpp:228"
+        },
+        {
+          "kind": "requires",
+          "keys": [
+            "powderdomain"
+          ],
+          "message": "powderdomain requires a generated powder grid",
+          "source": "RunSection/General/MultiSS/MultiSSExecutionPlan.cpp:235"
+        },
+        {
+          "kind": "requires",
+          "keys": [
+            "powdergammapoints"
+          ],
+          "message": "powdergammapoints greater than one requires a generated theta/phi powder grid",
+          "source": "RunSection/General/MultiSS/MultiSSExecutionPlan.cpp:237"
+        },
+        {
+          "kind": "requires",
+          "keys": [
+            "powdergamma",
+            "powdergammapoints"
+          ],
+          "message": "powdergamma requires powdergammapoints greater than one",
+          "source": "RunSection/General/MultiSS/MultiSSExecutionPlan.cpp:239"
+        }
+      ]
+    }
+  }
+}

@@ -1,4 +1,4 @@
-import MolSpinPy
+﻿import MolSpinPy
 import json
 import os
 import numpy as np
@@ -866,10 +866,46 @@ def lambda_free_recursive_action(step, var):
     return 1.0 if _is_even(step) else 0.0
 
 
+def test_task_spec():
+    """Using the spec sheet through Task (HSGeneral, SSGeneral and MultiSSGeneral have specs)."""
+    from MolSpinPy.objects import Task
+    from MolSpinPy.utility.molspin_spec import get_spec_sheet
+
+    # Editors complete the property names and types for the three canonical type names
+    task = Task("TE", "HSGeneral", calculation="yields", totaltime=1000.0, timestep=1.0, powder=True)
+    task2 = Task("TE", "HSGeneral", calculation="timeevolution", totaltime=1000.0, timestep=1.0, sampling="stochastic", montecarlosample = 100)
+
+    print("verified against MolSpin source:", get_spec_sheet().verified)
+    print("accepted keys:", len(task.allowed_properties()))
+
+    print("verified against molspin source:", get_spec_sheet().verified)
+    print("accepted keys:", len(task2.allowed_properties()))
+
+    # Aliases resolve to the canonical property, and defaults/choices come from MolSpin
+    prop = task.property_spec("powder")
+    print(prop.name, prop.value_type, prop.default)
+    print(task.property_spec("sampling").choices)
+
+    # Rules between inputs. Informational only, nothing is validated or rejected yet
+    spec = task.spec
+    print("powdergrid requires:", spec.requires_of("powdergrid"))
+    print("powderdomain conflicts with:", spec.conflicts_of("powderdomain"))
+    for c in spec.constraints_for("observables", kind="requires"):
+        print(" -", c.message, f"({c.source})")
+
+    # Unrecognised keys are reported rather than rejected, and other task types have no spec
+    task.set_property("totl_time", 5)
+    print("unknown:", task.unknown_properties())
+    assert Task("legacy", "StaticSS").spec is None
+    assert task.ConvertToDictionary()[1]["type"] == "HSGeneral"
+    print("task spec ok")
+
+
 #StrainT1times()
 #StrainPL()
 #test()
 #test2()
+test_task_spec()
 test_loader_roundtrip()
 test_object_bound_actions()
 test_dictionary_bound_loader()
