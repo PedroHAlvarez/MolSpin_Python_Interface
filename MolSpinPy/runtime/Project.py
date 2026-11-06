@@ -640,7 +640,7 @@ class Project():
             template=self._template,
             post_step=self._sync_object_systems,
             spin_systems=self._spin_systems,
-            estimated_memory = kwargs.pop('estimated_memory', 1024) #at some point introduce a memory estimator function
+            estimated_memory = kwargs.pop('estimated_memory', 1024), #at some point introduce a memory estimator function
             **kwargs
         )
         return job_id
