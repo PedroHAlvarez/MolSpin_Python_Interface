@@ -211,7 +211,7 @@ class CustomActionFunction(ActionFunction):
         step = self._steps_per_action[action_id]
         result = self._internal_func(step, var, self.state, **self._param)
         
-        if result == None:
+        if result is None:
             result = var.value
         
         self._steps_per_action[action_id] += 1
