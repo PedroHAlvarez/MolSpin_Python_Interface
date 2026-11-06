@@ -325,14 +325,14 @@ fi
         allocated_hours = math.ceil(est_single_job_hours * safety_buffer)
         walltime_str = f"{allocated_hours:02d}:00:00"
         estimated_memory_str = ""
-        if type(estimated_memory) != type(str): #assume int (default is MB)
+        if isinstance(estimated_memory, str):
+            estimated_memory_str = estimated_memory
+        else: #assume int (default is MB)
             UNITS = ['M','G','T']
             while estimated_memory > 1024 and UNITS:
                 estimated_memory /= 1024
                 UNITS.pop(0)
             estimated_memory_str = f"{estimated_memory}{UNITS[0]}"
-        else:
-            estimated_memory_str = estimated_memory
             
         if walltime is not None:
             walltime_str = walltime
