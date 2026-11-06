@@ -89,7 +89,7 @@ class RemoteHpcOrchestrator:
 
     def _generate_slurm_script(self, remote_results_dir, remote_logs_dir, remote_binary_path, 
                            partition, walltime, total_tasks, project_name, max_concurrent, 
-                           calcs_per_node, total_array_nodes,max_nodes, armadillo_path,email_address = ""):
+                           calcs_per_node, total_array_nodes,max_nodes, armadillo_path,estimated_memory,email_address = ""):
         print(f"--- Generating Slurm Script Blueprint ---")
         print(f" - Project: {project_name}")
         print(f" - Active Walltime Limit: {walltime}")
@@ -118,6 +118,7 @@ class RemoteHpcOrchestrator:
 #SBATCH --cpus-per-task={max_concurrent}
 #SBATCH --time={walltime}
 #SBATCH --array=1-{total_array_nodes}%{max_nodes}
+#SBATCH --mem={estimated_memory}
 #SBATCH --output={remote_logs_dir}/array_%A_%a.out
 #SBATCH --error={remote_logs_dir}/array_%A_%a.err
 {email_script}
@@ -209,7 +210,7 @@ fi
         return job_script,epilogue_script
 
     def execute_remote_deployment(self, steps, resolved_dict, project_name, manager, template : FileTemplate.FileTemplate, 
-                                  remote_binary_path, remote_working_dir,partition, walltime,calcs_per_node,max_nodes, **kwargs):
+                                  remote_binary_path, remote_working_dir,partition, walltime,calcs_per_node,max_nodes, estimated_memory, **kwargs):
         base_template = template
         hpc_ssh = self._connect()
         sftp = hpc_ssh.open_sftp()
@@ -314,6 +315,16 @@ fi
         safety_buffer=kwargs.get('safety_buffer', 1.2)
         allocated_hours = math.ceil(est_single_job_hours * safety_buffer)
         walltime_str = f"{allocated_hours:02d}:00:00"
+        estimated_memory_str = ""
+        if type(estimated_memory) != type(str): #assume int (default is MB)
+            UNITS = ['M','G','T']
+            while estimated_memory > 1024 and UNITS:
+                estimated_memory /= 1024
+                UNITS.pop(0)
+            estimated_memory_str = f"{estimated_memory}{UNITS[0]}"
+        else:
+            estimated_memory_str = estimated_memory
+            
         if walltime is not None:
             walltime_str = walltime
 
@@ -330,7 +341,8 @@ fi
             total_array_nodes=total_array_nodes,
             max_nodes=max_nodes,
             armadillo_path=kwargs.get("armadillo",""),
-            email_address=kwargs.get('email', "")
+            email_address=kwargs.get('email', ""),
+            memory = estimated_memory_str
         )
         submitted_job_ids = []
         #script_filename = "submit_pipeline.sh"
