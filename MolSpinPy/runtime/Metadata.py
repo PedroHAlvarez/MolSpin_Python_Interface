@@ -177,7 +177,7 @@ class ProjectMetadata:
                 parent_metadata["children"].append(action_metadata)
         return roots
 
-    def as_dict(self, steps=None, execution_mode=None, extra=None):
+    def as_dict(self, steps=None, steps_per_simulation=None, execution_mode=None, extra=None):
         actions = self._actions
         action_tree = self._action_tree_data
 
@@ -188,6 +188,7 @@ class ProjectMetadata:
             "execution": {
                 "mode": execution_mode,
                 "steps": steps,
+                "steps_per_simulation": steps_per_simulation,
                 "python": platform.python_version(),
                 "platform": platform.platform(),
             },
@@ -209,9 +210,9 @@ class ProjectMetadata:
             metadata["execution"].update(self._value(extra))
         return metadata
 
-    def write(self, output_dir, steps=None, execution_mode=None, extra=None):
+    def write(self, output_dir, steps=None, steps_per_simulation=None, execution_mode=None, extra=None):
         os.makedirs(output_dir, exist_ok=True)
-        metadata = self.as_dict(steps, execution_mode, extra)
+        metadata = self.as_dict(steps, steps_per_simulation, execution_mode, extra)
         json_path = os.path.join(output_dir, f"{self.project_name}_metadata.json")
         markdown_path = os.path.join(output_dir, f"{self.project_name}_metadata.md")
         with open(json_path, "w", encoding="utf-8") as metadata_file:

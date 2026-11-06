@@ -256,8 +256,14 @@ index mapping. A state may also be supplied as raw MolSpin text using
 into nuclear permutations when states are added to a spin system.
 
 \texttt{Settings(name, steps=1, **properties)} creates a general settings
-block. \texttt{Task(name, type, **properties)} creates a run task; the type
-and properties must be valid for the MolSpin executable. Use
+block. For project deployment, the settings block's \texttt{steps} value is
+the default number of MSD files (jobs) to generate. The value written as
+\texttt{steps} in each generated MSD file is configured separately with
+\texttt{steps\_per\_simulation}; it defaults to 1. Thus, \texttt{steps}
+passed to \texttt{Deploy} or \texttt{SubmitToHPC} counts files, while
+\texttt{steps\_per\_simulation} controls the MolSpin steps inside each file.
+\texttt{Task(name, type, **properties)} creates a run task; the type and
+properties must be valid for the MolSpin executable. Use
 \texttt{project.add\_task(task)} to include it in the project.
 
 \section{Actions and parameter sweeps}
@@ -362,14 +368,26 @@ spin system attached to the project.
 \section{Local generation and execution}
 
 \texttt{Project.Deploy()} is the intended combined workflow for generating
-per-step MSD files, writing metadata, and optionally running a local MolSpin
-binary. The binary can be found through the \texttt{molspin} argument,
+MSD files, writing metadata, and optionally running a local MolSpin binary.
+The \texttt{steps} argument is the number of MSD files (independent MolSpin
+jobs) to create. It defaults to the value in the project's general settings,
+or to 1 if not specified there. \texttt{steps\_per\_simulation} sets the
+MolSpin \texttt{steps} value written in each MSD file's general settings; it
+defaults to 1. Each generated file is then run as one MolSpin job. For
+example, \texttt{steps=20} and \texttt{steps\_per\_simulation=5} create 20
+MSD files, each configured to run for 5 MolSpin steps.
+
+The binary can be found through the \texttt{molspin} argument,
 \texttt{MOLSPIN\_PATH} or \texttt{MOLSPIN\_HOME}, the system path, or common
-checkout folders. Additional options include \texttt{steps},
-\texttt{max\_processes}, and \texttt{NPZ}.
+checkout folders. Other options include \texttt{max\_processes} and
+\texttt{NPZ}.
 
 \begin{lstlisting}
-project.Deploy(molspin=r"C:\path\to\molspin.exe")
+project.Deploy(
+    steps=20,
+    steps_per_simulation=5,
+    molspin=r"C:\path\to\molspin.exe",
+)
 \end{lstlisting}
 
 \subsection{Output handling}
@@ -389,10 +407,15 @@ On a successful local run, logs are placed in
 
 \section{HPC deployment}
 
-Remote deployment uses SSH/SFTP through Paramiko and submits Slurm jobs. You
-need an SSH username, host, private-key path, remote working directory, and a
-MolSpin checkout or executable on the cluster. A proxy host may be supplied
-when required by the cluster's SSH configuration.
+Remote deployment uses SSH/SFTP through Paramiko and submits Slurm jobs. Its
+\texttt{steps} and \texttt{steps\_per\_simulation} arguments have the same
+meaning and defaults as for local deployment: \texttt{steps} is the number
+of MSD files/jobs, and \texttt{steps\_per\_simulation} is the MolSpin
+\texttt{steps} value inside each file (default 1). For example, 20 jobs with
+5 simulation steps each are submitted as 20 MSD files, each configured for
+5 steps. You need an SSH username, host, private-key path, remote working
+directory, and a MolSpin checkout or executable on the cluster. A proxy host
+may be supplied when required by the cluster's SSH configuration.
 
 \begin{lstlisting}
 project.LoadHPC(
@@ -413,6 +436,8 @@ job_ids = project.SubmitToHPC(
     walltime="01:00:00",
     max_concurrent=20,
     max_nodes=10,
+    steps=20,
+    steps_per_simulation=5,
 )
 project.WatchHPC(job_ids)
 \end{lstlisting}
@@ -462,7 +487,10 @@ transfer, so do not rely on that workspace as a long-term backup.
 Metadata generation is enabled by default. Local deployment writes a JSON
 record and a readable Markdown record alongside the generated files. The
 record includes the base input, template source, settings, action tree,
-function configuration, and execution details.
+function configuration, and execution details. The JSON execution record
+stores \texttt{steps} (the number of generated MSD files) separately from
+\texttt{steps\_per\_simulation} (the MolSpin steps configured inside each
+file).
 
 \texttt{ProjectLoader} reconstructs a project from a metadata JSON file or a
 dictionary. Built-in action functions can be restored without executing

@@ -209,8 +209,26 @@ fi
 """
         return job_script,epilogue_script
 
-    def execute_remote_deployment(self, steps, resolved_dict, project_name, manager, template : FileTemplate.FileTemplate, 
+    def execute_remote_deployment(self, steps, steps_per_simulation, resolved_dict, project_name, manager, template : FileTemplate.FileTemplate, 
                                   remote_binary_path, remote_working_dir,partition, walltime,calcs_per_node,max_nodes, estimated_memory, **kwargs):
+        """Deploy jobs to HPC cluster.
+        
+        Args:
+            steps: Number of MSD files to create (each represents one independent job)
+            steps_per_simulation: Number of simulation steps within each MSD file
+            resolved_dict: The resolved configuration dictionary
+            project_name: Name of the project
+            manager: ActionManager instance for running actions
+            template: FileTemplate instance
+            remote_binary_path: Path to MolSpin binary on HPC
+            remote_working_dir: Working directory on HPC
+            partition: SLURM partition
+            walltime: SLURM walltime limit
+            calcs_per_node: Max concurrent processes per node
+            max_nodes: Max nodes to use
+            estimated_memory: Estimated memory per job
+            **kwargs: Additional arguments (post_step, spin_systems, armadillo, email, etc.)
+        """
         base_template = template
         hpc_ssh = self._connect()
         sftp = hpc_ssh.open_sftp()
@@ -225,13 +243,6 @@ fi
             print("Skipping remote deployment due to ASSERT_DEPLOY=False.")
             return None
 
-
-
-        #sftp.put(metadata_json, f"{remote_results_dir}/project_metadata.json")
-        #sftp.put(metadata_markdown, f"{remote_results_dir}/project_metadata.md")
-        #os.remove(metadata_json)
-        #os.remove(metadata_markdown)
-
         start_id = 0
         initial_input = copy.deepcopy(resolved_dict)  # before actions mutate it
         metadata = ProjectMetadata(project_name, base_template, initial_input, manager, initial_input.get('settings', {}),
@@ -244,11 +255,11 @@ fi
             if post_step is not None:
                 post_step()
 
-            # Only the keys that differ per step are copied; everything else is shared
+            # Only the keys that differ per job are copied; everything else is shared
             # because rendering never mutates the context.
             snapshot = dict(resolved_dict)
             general = dict(snapshot['settings'])
-            general['general'] = {**general['general'], 'steps': 1}
+            general['general'] = {**general['general'], 'steps': steps_per_simulation}
             snapshot['settings'] = general
             snapshot['tasks'] = {
                 key: {**task,
@@ -261,9 +272,6 @@ fi
             msd_filenames.append(filename)
             rendered_str = template.render(snapshot)
             compressor.process_rendered_string(rendered_str)
-
-            #remote_file_path = f"{remote_results_dir}/{filename}"
-            #template.render_to_file_ssh(snapshot,remote_file_path,sftp)
 
         template, defaults, sweep_data = compressor.build_payloads()
         manifest = f"{project_name}_hpc.jsonl.gz"
@@ -292,6 +300,7 @@ fi
             metadata_json, metadata_markdown = metadata.write(
                 ".",
                 steps=steps,
+                steps_per_simulation=steps_per_simulation,
                 execution_mode="hpc",
                 extra=metadata_extra,
             )
@@ -341,8 +350,8 @@ fi
             total_array_nodes=total_array_nodes,
             max_nodes=max_nodes,
             armadillo_path=kwargs.get("armadillo",""),
+            memory = estimated_memory_str,
             email_address=kwargs.get('email', ""),
-            memory = estimated_memory_str
         )
         submitted_job_ids = []
         #script_filename = "submit_pipeline.sh"

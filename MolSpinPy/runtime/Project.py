@@ -488,6 +488,16 @@ class Project():
             self.manager.run(i,True)
 
     def Deploy(self, **kwargs):
+        """Deploy a local MolSpin simulation project.
+        
+        Args:
+            steps (int): Number of MSD files (jobs) to create. Default from settings or 1.
+            steps_per_simulation (int): Number of simulation steps within each MSD file. 
+                                        Default from settings.steps_per_simulation or 1.
+            NPZ (bool): Convert results to NPZ format. Default False.
+            max_processes (int): Maximum parallel workers. Default 10.
+            molspin (str): Custom path to MolSpin binary.
+        """
         npz = kwargs.get('NPZ', False)
         max_processes = kwargs.get('max_processes', 10)
         if not self._executable_path and AssertFlags.get("ASSERT_BINARY", True):
@@ -505,9 +515,14 @@ class Project():
             try:
                 self._extract_settings()
             except:
-                print("Warning: Could not automatically extract settings. Defaulting to 1 step.")
+                print("Warning: Could not automatically extract settings. Defaulting to 1 job with 1 step per simulation.")
                 self._settings['steps'] = 1
+        
+        # steps: how many MSD files to create
         steps = int(kwargs.get('steps', self._settings['steps']))
+        
+        # steps_per_simulation: how many steps within each MSD file
+        steps_per_simulation = int(kwargs.get('steps_per_simulation', self._settings.get('steps_per_simulation', 1)))
 
         io_queue = None
 
@@ -533,7 +548,7 @@ class Project():
             t.start()
             workers.append(t)
 
-        print(f"Deploying Project {self._name} : Creating {steps} MSD files")
+        print(f"Deploying Project {self._name} : Creating {steps} MSD files with {steps_per_simulation} steps per simulation")
         initial_input = copy.deepcopy(self._resolved_dict)  # before actions mutate it
         metadata = ProjectMetadata(self.name, self._template, initial_input, self._manager, self._settings,
                                    spin_systems=self._spin_systems)
@@ -549,14 +564,17 @@ class Project():
 
                 self._resolved_dict['tasks'][key]['logfile'] = logfile
                 self._resolved_dict['tasks'][key]['datafile'] = resultfile
-            #self._resolved_dict['settings']['general']['steps'] = 1
 
             snapshot = copy.deepcopy(self._resolved_dict)
+            
+            # Set steps_per_simulation in the MSD file settings
+            if 'settings' in snapshot and 'general' in snapshot['settings']:
+                snapshot['settings']['general']['steps'] = steps_per_simulation
 
             if not self.check_dict_structure(snapshot):
                 if io_queue:
                     io_queue.put(None)
-                raise ValueError(f"Structural fault at Step {i}: An action corrupted the mandatory schema.")
+                raise ValueError(f"Structural fault at Job {i}: An action corrupted the mandatory schema.")
             
             current_dicts.append(snapshot)
 
@@ -574,7 +592,7 @@ class Project():
             raise IOError("Deployment verification failed! Data on disk is incomplete or corrupted.")
 
         if AssertFlags.get("ASSERT_METADATA"):
-            metadata.write(output_dir, steps=steps, execution_mode="local")
+            metadata.write(output_dir, steps=steps, steps_per_simulation=steps_per_simulation, execution_mode="local")
         else:
             print("Skipping metadata generation due to ASSERT_METADATA=False")
 
@@ -609,6 +627,23 @@ class Project():
             self._hpc.remote_working_dir = remote_working_dir
         
     def SubmitToHPC(self, hpc_username, hpc_host, hpc_key_path, remote_binary_path, remote_working_dir, **kwargs):
+        """Submit a project to HPC cluster for execution.
+        
+        Args:
+            hpc_username: HPC cluster username
+            hpc_host: HPC cluster hostname
+            hpc_key_path: Path to SSH private key
+            remote_binary_path: Path to MolSpin binary on HPC
+            remote_working_dir: Working directory on HPC
+            steps (int): Number of MSD files (jobs) to create. Default from settings or 1.
+            steps_per_simulation (int): Number of simulation steps within each MSD file.
+                                        Default from settings.steps_per_simulation or 1.
+            partition: SLURM partition. Default from cluster profile.
+            walltime: SLURM walltime limit. Default '01:00:00'.
+            max_concurrent: Max concurrent processes per node. Default 20.
+            max_nodes: Max nodes to use. Default 10.
+            **kwargs: Additional HPC parameters
+        """
         if self._hpc == None:
             cluster_profile = kwargs.pop('cluster_profile', 'gwdg')
             self._hpc = RemoteHpcOrchestrator(
@@ -626,9 +661,16 @@ class Project():
         if self._resolved_dict == {}:
             self._resolved_dict = self._base_dict
         
+        # steps: how many MSD files to create
+        steps = int(kwargs.pop('steps', self._settings.get('steps', 1)))
+        
+        # steps_per_simulation: how many steps within each MSD file
+        steps_per_simulation = int(kwargs.pop('steps_per_simulation', self._settings.get('steps_per_simulation', 1)))
+        
         job_id = self._hpc.execute_remote_deployment(
             project_name=self.name,
-            steps=int(self._settings.get('steps', 1)),
+            steps=steps,
+            steps_per_simulation=steps_per_simulation,
             resolved_dict=self._resolved_dict,
             manager=self._manager,
             remote_binary_path=remote_binary_path,
@@ -640,15 +682,20 @@ class Project():
             template=self._template,
             post_step=self._sync_object_systems,
             spin_systems=self._spin_systems,
-            estimated_memory = kwargs.pop('estimated_memory', 1024) #at some point introduce a memory estimator function
+            estimated_memory = kwargs.pop('estimated_memory', 1024), #at some point introduce a memory estimator function
             **kwargs
         )
         return job_id
     
     def WatchHPC(self, job_id):
+        """Watch HPC job progress.
+        
+        Args:
+            job_id: The SLURM job ID(s) to watch
+        """
         if self._hpc == None:
             return RuntimeError("No HPC project found")
-        self._hpc.watch_hpc_job(job_id=job_id, total_tasks=self._settings.get('steps',1), project_name=self.name, poll_interval=5)
+        self._hpc.watch_hpc_job(job_id=job_id, total_tasks=self._settings.get('steps', 1), project_name=self.name, poll_interval=5)
     
     def DownloadFromHPC(self, job_id, remote_working_dir, local_npz_output_path):
         #orchestrator = RemoteHpcOrchestrator(hpc_username, hpc_host, hpc_key_path, proxy_host)
