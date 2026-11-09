@@ -109,6 +109,8 @@ class RemoteHpcOrchestrator:
             remote_binary_path=remote_binary_path,
             armadillo_path=armadillo_path,
         )
+        estimated_memory_bash = f"#SBATCH --mem={estimated_memory}" if estimated_memory else ""
+        
 
         job_script = f"""#!/bin/bash
 #SBATCH --job-name=molspin_python_{project_name}
@@ -118,7 +120,7 @@ class RemoteHpcOrchestrator:
 #SBATCH --cpus-per-task={max_concurrent}
 #SBATCH --time={walltime}
 #SBATCH --array=1-{total_array_nodes}%{max_nodes}
-#SBATCH --mem={estimated_memory}
+{estimated_memory_bash}
 #SBATCH --output={remote_logs_dir}/array_%A_%a.out
 #SBATCH --error={remote_logs_dir}/array_%A_%a.err
 {email_script}
@@ -327,6 +329,8 @@ fi
         estimated_memory_str = ""
         if isinstance(estimated_memory, str):
             estimated_memory_str = estimated_memory
+        elif estimated_memory is None:
+            estimated_memory_str = ""
         else: #assume int (default is MB)
             UNITS = ['M','G','T']
             while estimated_memory > 1024 and UNITS:
