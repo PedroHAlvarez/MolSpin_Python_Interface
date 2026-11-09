@@ -17,6 +17,7 @@ DataManagment.py
 resonance_frequency_scan.py
 *metadata.json
 *.md
+HS_GENERAL_POWDER_AVERAGING_SUMMARY.md
 *.egg-info
 *.txt
 *pkl

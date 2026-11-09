@@ -350,7 +350,7 @@ fi
             total_array_nodes=total_array_nodes,
             max_nodes=max_nodes,
             armadillo_path=kwargs.get("armadillo",""),
-            memory = estimated_memory_str,
+            estimated_memory = estimated_memory_str,
             email_address=kwargs.get('email', ""),
         )
         submitted_job_ids = []
