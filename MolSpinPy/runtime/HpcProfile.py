@@ -230,6 +230,7 @@ HpcProfile.register(HpcProfile(
     default_partition="rosa.p",
     runtime_modules=_ROSA_MODULES,
     build_modules=_ROSA_MODULES,
+    build_partition="rosa_express.p",
     build_make_args=("ARCHFLAGS=", "LOOPFLAGS="),
     metadata_extra={"cluster_profile": "rosa"},
 ))

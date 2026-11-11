@@ -544,7 +544,7 @@ class Project():
         num_workers = 20
         print(f"Spawning {num_workers} parallel MSD file writing threads...")
         for _ in range(num_workers):
-            t = MSDWriter(self._template,io_queue,self._name,target)
+            t = MSDWriter(self._template,io_queue,self._name,target,steps_per_simulation)
             t.start()
             workers.append(t)
 
@@ -667,6 +667,7 @@ class Project():
         # steps_per_simulation: how many steps within each MSD file
         steps_per_simulation = int(kwargs.pop('steps_per_simulation', self._settings.get('steps_per_simulation', 1)))
         
+        self._submitted_steps = steps
         job_id = self._hpc.execute_remote_deployment(
             project_name=self.name,
             steps=steps,
@@ -695,7 +696,7 @@ class Project():
         """
         if self._hpc == None:
             return RuntimeError("No HPC project found")
-        self._hpc.watch_hpc_job(job_id=job_id, total_tasks=self._settings.get('steps', 1), project_name=self.name, poll_interval=5)
+        self._hpc.watch_hpc_job(job_id=job_id, total_tasks=getattr(self, '_submitted_steps', self._settings.get('steps', 1)), project_name=self.name, poll_interval=5)
     
     def DownloadFromHPC(self, job_id, remote_working_dir, local_npz_output_path):
         #orchestrator = RemoteHpcOrchestrator(hpc_username, hpc_host, hpc_key_path, proxy_host)
