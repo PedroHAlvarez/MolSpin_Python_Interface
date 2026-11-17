@@ -23,7 +23,7 @@ jobs:
 
       - name: Generate README.md from manual.tex
         run: |
-          pandoc manual.tex -f latex -t gfm -o README.md
+          pandoc MANUAL.tex -f latex -t gfm -o README.md
 
       - name: Commit and push updated README.md
         run: |
