@@ -3,9 +3,8 @@ name: Build README from TeX
 on:
   push:
     paths:
-      - '**.tex'
-    branches:
-      - main
+      - '**.tex' # Automatically runs on ANY branch when a .tex file changes
+  workflow_dispatch: # Lets you manually run it on any branch from the Actions tab
 
 permissions:
   contents: write
@@ -24,7 +23,7 @@ jobs:
 
       - name: Generate README.md from manual.tex
         run: |
-          pandoc manual.tex -f latex -t gfm --toc -o README.md
+          pandoc manual.tex -f latex -t gfm -o README.md
 
       - name: Commit and push updated README.md
         run: |
