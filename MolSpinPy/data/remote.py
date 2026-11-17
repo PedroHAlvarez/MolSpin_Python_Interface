@@ -75,7 +75,6 @@ def fetch_dat_as_npz(
     key_path="~/.ssh/id_rsa_generated",
 ):
     """Download ``<filename>.dat`` from ``host`` and save it locally as ``.npz``.
-
     Authenticates with the key at ``key_path``; if that fails and ``password`` is
     given, logs in with the password and enrolls the key. Returns the written
     ``.npz`` path, or ``None`` on failure.

@@ -6,3 +6,4 @@ from .objects import ActionScript
 from .import runtime
 from .import processing
 from .import data
+from .import benchmarks

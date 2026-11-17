@@ -32,7 +32,7 @@ dependencies = [
 dev = ["pytest>=6.0", "pytest-cov", "black", "flake8"]
 
 [tool.setuptools]
-packages = ["MolSpinPy"]
+packages = ["MolSpinPy", "MolSpinPy.benchmarks"]
 
 [tool.setuptools.package-data]
 MolSpinPy = ["resources/templates/*", "resources/molspin_spec.json"]
