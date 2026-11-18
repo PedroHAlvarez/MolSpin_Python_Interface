@@ -1,12 +1,13 @@
 """Cryptochrome-4 benchmark system using stochastic Schrodinger."""
 
 from itertools import product
-from typing import Dict, Iterable, Iterator, Sequence, Tuple
+from typing import Dict, Iterable, Iterator, Sequence, Tuple, Optional
 
-from .benchmark import SystemVariant
+from .benchmark import SystemVariant, BenchmarkCase
 from .stochastic_schrodinger import (
     StochasticSchrodingerBenchmark,
     StochasticSchrodingerParameters,
+    SSBconfig,
 )
 
 
@@ -20,12 +21,13 @@ class Cryptochrome4Benchmark(StochasticSchrodingerBenchmark):
     def __init__(
         self,
         variants: Iterable[SystemVariant],
-        samples: int = 12,
         exponents: Iterable[float] = DEFAULT_EXPONENTS,
         dephasing_rates: Iterable[float] = DEFAULT_DEPHASING_RATES,
         fields: Iterable[Sequence[float]] = DEFAULT_FIELDS,
         initial_state: str = "S",
         name: str = "Cryptochrome4",
+        config: SSBconfig = SSBconfig(),
+        runs: int = 1,
     ):
         if not isinstance(initial_state, str) or not initial_state:
             raise ValueError("initial_state must be a non-empty string.")
@@ -35,24 +37,9 @@ class Cryptochrome4Benchmark(StochasticSchrodingerBenchmark):
         )
         self.fields = self._validated_fields(fields)
         self.initial_state = initial_state
-        super().__init__(name, variants, samples)
-        self.parameter_sweep: Tuple[StochasticSchrodingerParameters, ...] = tuple(
-            StochasticSchrodingerParameters(
-                k_s_exponent=k_s_exponent,
-                k_i_exponent=k_i_exponent,
-                k_s=10 ** k_s_exponent / 10**9,
-                k_i=10 ** k_i_exponent / 10**9,
-                r_std=r_std,
-                field=field,
-                samples=self.samples,
-                initial_state=self.initial_state,
-            )
-            for field, r_std, k_s_exponent, k_i_exponent in product(
-                self.fields,
-                self.dephasing_rates,
-                self.exponents,
-                self.exponents,
-            )
+        super().__init__(name, variants, config=config, runs=runs)
+        self.parameter_sweep : Tuple[StochasticSchrodingerParameters, ...] = (
+            self._build_sweep()
         )
 
     @staticmethod
@@ -115,7 +102,7 @@ class Cryptochrome4Benchmark(StochasticSchrodingerBenchmark):
             )
         system = next(iter(spin_systems))
         prefix = f"spinsystems.{system}"
-        parameters = self.parameter_sweep
+        parameters = self._build_sweep(variant)
         bindings = {
             f"{prefix}.transitions.s_sdd.rate": tuple(
                 point.k_s for point in parameters
@@ -135,3 +122,34 @@ class Cryptochrome4Benchmark(StochasticSchrodingerBenchmark):
                 point.k_i for point in parameters
             )
         return bindings
+
+    def _build_sweep(
+            self, varient: Optional[SystemVariant[SSBconfig]] = None
+    ) -> Tuple[StochasticSchrodingerParameters, ...]:
+        cfg = self.resolve_config(varient)
+        return tuple(
+            StochasticSchrodingerParameters(
+                k_s_exponent=k_s_exponent,
+                k_i_exponent=k_i_exponent,
+                k_s=10 ** k_s_exponent / 10**9,
+                k_i=10 ** k_i_exponent / 10**9,
+                r_std=r_std,
+                field=field,
+                samples=cfg.samples,
+                initial_state=self.initial_state,
+                run = run + 1
+            )
+            for run, field, r_std, k_s_exponent, k_i_exponent in product(
+                range(self.runs),
+                self.fields,
+                self.dephasing_rates,
+                self.exponents,
+                self.exponents,
+            )
+        )
+    def iter_cases(self) -> Iterator[BenchmarkCase[StochasticSchrodingerParameters]]:
+        """Iterate over every case in the benchmark system."""
+        for variant in self.variants:
+            for parameters in self._build_sweep(variant):
+                yield BenchmarkCase(self.name, variant, parameters)
+    

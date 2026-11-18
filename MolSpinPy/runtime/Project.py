@@ -233,14 +233,53 @@ class Project():
                     return candidate
         return None
 
+    @staticmethod
+    def _read_env_file_vars(target_vars=("MOLSPIN_PATH", "MOLSPIN_HOME")):
+        """Scan upwards from cwd for a .env file and extract target variables without mutating os.environ."""
+        cwd = os.path.abspath(os.getcwd())
+        search_dirs = [cwd, os.path.dirname(cwd), os.path.dirname(os.path.dirname(cwd))]
+        
+        for directory in dict.fromkeys(search_dirs):
+            env_path = os.path.join(directory, ".env")
+            if not os.path.isfile(env_path):
+                continue
+            
+            found_vars = {}
+            try:
+                with open(env_path, "r", encoding="utf-8") as f:
+                    for raw_line in f:
+                        line = raw_line.strip()
+                        if not line or line.startswith("#") or "=" not in line:
+                            continue
+                        if line.startswith("export "):
+                            line = line[len("export "):].strip()
+                        
+                        key, val = line.split("=", 1)
+                        key = key.strip()
+                        if key in target_vars:
+                            # Strip matching single/double quotes and inline comments
+                            val = val.strip()
+                            if (val.startswith('"') and val.endswith('"')) or (val.startswith("'") and val.endswith("'")):
+                                val = val[1:-1]
+                            else:
+                                val = val.split("#", 1)[0].strip()
+                            found_vars[key] = val
+            except OSError:
+                continue
+                
+            if found_vars:
+                return env_path, found_vars
+        return None, {}
+
     def _find_molspin_binary(self, custom_path=None):
         """Locate the local MolSpin executable.
 
         Search order (first hit wins):
           1. ``custom_path`` (the ``molspin=`` kwarg of Deploy): a binary or a MolSpin directory
           2. ``MOLSPIN_PATH`` / ``MOLSPIN_HOME`` environment variables (same forms)
-          3. ``molspin`` on the system PATH
-          4. Common checkout locations: ./MolSpin, ../MolSpin and their parents' siblings
+          3. ``.env`` file in cwd or parent directories, defining ``MOLSPIN_PATH`` or ``MOLSPIN_HOME``
+          4. ``molspin`` on the system PATH
+          5. Common checkout locations: ./MolSpin, ../MolSpin and their parents' siblings
         Directories are checked directly and in bin/, build/ and Release/.
         Returns the absolute path, or None (after printing where it looked).
         """
@@ -262,6 +301,13 @@ class Project():
             if found:
                 return found
 
+        #note need to read enviroment file
+        env_path, env_vars = self._read_env_file_vars()
+        for var in ("MOLSPIN_PATH", "MOLSPIN_HOME"):
+            found = try_location(f"{env_path} ${var}" if env_path else f".env ${var}", env_vars.get(var))
+            if found:
+                return found
+        
         for name in self._binary_filenames():
             on_path = shutil.which(name)
             if on_path:

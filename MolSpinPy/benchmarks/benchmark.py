@@ -5,14 +5,16 @@ from copy import deepcopy
 from dataclasses import dataclass
 from typing import Any, Dict, Generic, Iterable, Iterator, Mapping, Optional, Tuple, TypeVar
 
+ConfigT = TypeVar("ConfigT")
 
 @dataclass
-class SystemVariant:
+class SystemVariant(Generic[ConfigT]):
     """A named MolSpin input for one size or configuration of a system."""
 
     name: str
     model: dict
     hilbert_dimension: Optional[int] = None
+    config: Optional[ConfigT] = None
 
     def __post_init__(self):
         if not isinstance(self.name, str) or not self.name.strip():
